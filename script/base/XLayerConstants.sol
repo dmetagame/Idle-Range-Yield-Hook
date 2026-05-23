@@ -19,6 +19,16 @@ library XLayerConstants {
     address internal constant XLAYER_UNIVERSAL_ROUTER = 0xDa00aE15d3A71466517129255255db7c0c0956d3;
     address internal constant XLAYER_UNIVERSAL_ROUTER_211 = 0x8B844f885672f333Bc0042cB669255f93a4C1E6b;
 
+    // ===== X Layer testnet (1952, Terigon) — deployed by 02_DeployAllToXLayerTestnet + 03_FinishDeploy =====
+    address internal constant TESTNET_TOKEN0 = 0x3517b74800E6A731656D8cc809d77f730da4d1dA;
+    address internal constant TESTNET_TOKEN1 = 0x746A932D764d37f10c2f474D170734A05a20e87a;
+    address internal constant TESTNET_POOL_MANAGER = 0x4E279b5dFe71AF33b31266cf9187E1B6fE023F00;
+    address internal constant TESTNET_POSITION_MANAGER = 0xAB4A22615f8dF2cb7A3224dc104E81bB719add48;
+    address internal constant TESTNET_V4_ROUTER = 0x8444b2AdEC5de25B46097A0C96f744bC91Bc02F0;
+    address internal constant TESTNET_VAULT0 = 0xB9D0Ca2E9EA03e92d2B2674547Aae70435A0F94a;
+    address internal constant TESTNET_VAULT1 = 0xF0221bDE2cdf11b9855F91B491597076d27804Cf;
+    address internal constant TESTNET_IDLE_YIELD_HOOK = 0x6ea361772A4282c7b39AA8Ece010DEBB2f4898c0;
+
     function poolManager(uint256 chainId) internal pure returns (address) {
         if (chainId == XLAYER_MAINNET) return XLAYER_POOL_MANAGER;
         return AddressConstants.getPoolManagerAddress(chainId);

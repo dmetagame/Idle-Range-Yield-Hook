@@ -97,7 +97,7 @@ contract DeployAllToXLayerTestnet is Script {
 
         vm.stopBroadcast();
 
-        console2.log("===== X Layer Testnet (chain 195) =====");
+        console2.log("===== X Layer Testnet (chain 1952) =====");
         console2.log("Token0:           ", address(token0));
         console2.log("Token1:           ", address(token1));
         console2.log("Permit2:          ", permit2);
