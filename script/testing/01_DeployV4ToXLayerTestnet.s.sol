@@ -11,13 +11,13 @@ import {V4RouterDeployer} from "hookmate/artifacts/V4Router.sol";
 import {XLayerConstants} from "../base/XLayerConstants.sol";
 
 /// @notice Bootstraps Uniswap v4 core on a chain that has no canonical deployment yet.
-/// @dev Run against X Layer testnet (chain 195). After running, copy the printed addresses
-///      into XLayerConstants.sol under a new XLAYER_TESTNET_* block.
+/// @dev Run against X Layer testnet (chain 1952, Terigon). After running, copy the printed
+///      addresses into XLayerConstants.sol under a new XLAYER_TESTNET_* block.
 contract DeployV4ToXLayerTestnet is Script {
     function run() public {
         require(
             block.chainid == XLayerConstants.XLAYER_TESTNET,
-            "Run against X Layer testnet (chain 195) only"
+            "Run against X Layer testnet (chain 1952) only"
         );
 
         address canonicalPermit2 = XLayerConstants.permit2();

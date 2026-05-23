@@ -4,11 +4,12 @@ pragma solidity ^0.8.26;
 import {AddressConstants} from "hookmate/constants/AddressConstants.sol";
 
 /// @notice X Layer-specific Uniswap V4 deployment addresses, plus passthrough to hookmate for other chains.
-/// @dev Sourced from https://developers.uniswap.org/contracts/v4/deployments (X Layer mainnet, chain 196).
-///      X Layer testnet (chain 195) has no canonical V4 deployment as of 2026-05; deploy locally if needed.
+/// @dev Mainnet addresses from https://developers.uniswap.org/contracts/v4/deployments (chain 196).
+///      Testnet (chain 1952, Terigon) has no canonical V4 deployment as of 2026-05; deploy locally.
+///      The legacy testnet at chain 195 is deprecated by OKX; use 1952.
 library XLayerConstants {
     uint256 internal constant XLAYER_MAINNET = 196;
-    uint256 internal constant XLAYER_TESTNET = 195;
+    uint256 internal constant XLAYER_TESTNET = 1952;
 
     address internal constant XLAYER_POOL_MANAGER = 0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32;
     address internal constant XLAYER_POSITION_MANAGER = 0xcF1EAFC6928dC385A342E7C6491d371d2871458b;

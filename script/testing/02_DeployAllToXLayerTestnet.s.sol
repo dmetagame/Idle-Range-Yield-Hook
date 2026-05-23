@@ -47,7 +47,7 @@ contract DeployAllToXLayerTestnet is Script {
     int24 constant UPPER_TICK = 960;
 
     function run() public {
-        require(block.chainid == XLayerConstants.XLAYER_TESTNET, "Run against X Layer testnet (195)");
+        require(block.chainid == XLayerConstants.XLAYER_TESTNET, "Run against X Layer testnet (1952)");
 
         address sender = msg.sender;
         console2.log("Deployer (sender):", sender);

@@ -19,4 +19,4 @@ xlayer_testnet = "${XLAYER_TESTNET_RPC_URL}"
 
 [etherscan]
 xlayer = { key = "${OKLINK_API_KEY}", url = "https://www.oklink.com/api/v5/explorer/contract/verify-source-code-plugin", chain = 196 }
-xlayer_testnet = { key = "${OKLINK_API_KEY}", url = "https://www.oklink.com/api/v5/explorer/contract/verify-source-code-plugin", chain = 195 }
+xlayer_testnet = { key = "${OKLINK_API_KEY}", url = "https://www.oklink.com/api/v5/explorer/contract/verify-source-code-plugin", chain = 1952 }
