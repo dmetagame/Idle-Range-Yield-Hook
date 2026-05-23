@@ -2,16 +2,21 @@
 pragma solidity ^0.8.26;
 
 import {BaseHook} from "@openzeppelin/uniswap-hooks/src/base/BaseHook.sol";
+import {CurrencySettler} from "@openzeppelin/uniswap-hooks/src/utils/CurrencySettler.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager, SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {ERC6909} from "@uniswap/v4-core/src/ERC6909.sol";
+
+import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
 
 import {ERC4626} from "solmate/src/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
@@ -19,10 +24,11 @@ import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 
 /// @title IdleYieldHook — concentrated liquidity that earns lending yield while out-of-range.
-/// @notice Day-3 milestone: vault routing for parked capital + tick-driven park/unpark.
-contract IdleYieldHook is BaseHook, ERC6909 {
+/// @notice Day-4: V4 LP minting via unlock callback when in-range; vault routing when out-of-range.
+contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
+    using CurrencySettler for Currency;
     using SafeTransferLib for ERC20;
 
     enum Status {
@@ -36,6 +42,7 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         int24 upperTick;
         ERC4626 vault0;
         ERC4626 vault1;
+        uint128 liquidityInPool;
         uint256 token0InHook;
         uint256 token1InHook;
         uint256 vault0Shares;
@@ -44,7 +51,18 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         Status status;
     }
 
+    enum CallbackKind {
+        MINT_TO_RANGE,
+        BURN_ALL_RANGE
+    }
+
+    struct CallbackData {
+        CallbackKind kind;
+        PoolKey key;
+    }
+
     uint256 internal constant MIN_LIQUIDITY = 1_000;
+    bytes32 internal constant POSITION_SALT = bytes32(0);
 
     mapping(PoolId => ManagedPool) public pools;
 
@@ -53,6 +71,8 @@ contract IdleYieldHook is BaseHook, ERC6909 {
     );
     event Deposited(PoolId indexed poolId, address indexed user, uint256 amount0, uint256 amount1, uint256 shares);
     event Withdrawn(PoolId indexed poolId, address indexed user, uint256 amount0, uint256 amount1, uint256 shares);
+    event V4LiquidityMinted(PoolId indexed poolId, uint128 liquidity, uint256 used0, uint256 used1);
+    event V4LiquidityBurned(PoolId indexed poolId, uint128 liquidity, uint256 received0, uint256 received1);
     event Parked(PoolId indexed poolId, uint256 amount0, uint256 amount1);
     event Unparked(PoolId indexed poolId, uint256 amount0, uint256 amount1);
 
@@ -74,7 +94,7 @@ contract IdleYieldHook is BaseHook, ERC6909 {
             afterAddLiquidity: false,
             beforeRemoveLiquidity: false,
             afterRemoveLiquidity: false,
-            beforeSwap: false,
+            beforeSwap: true,
             afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
@@ -104,18 +124,34 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         return BaseHook.beforeAddLiquidity.selector;
     }
 
+    function _beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
+        internal
+        override
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        PoolId poolId = key.toId();
+        ManagedPool storage p = pools[poolId];
+        if (p.status == Status.PARKED_OUT_OF_RANGE) {
+            (, int24 currentTick,,) = poolManager.getSlot0(poolId);
+            bool willApproachRange = params.zeroForOne
+                ? p.upperTick <= currentTick // price decreasing into a range that sits at/below current tick
+                : p.lowerTick > currentTick; // price increasing into a range that sits above current tick
+            if (willApproachRange) {
+                _unparkInUnlock(poolId, p, key);
+            }
+        }
+        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+    }
+
     function _afterSwap(address, PoolKey calldata key, SwapParams calldata, BalanceDelta, bytes calldata)
         internal
         override
         returns (bytes4, int128)
     {
-        _rebalance(key);
+        _rebalanceInUnlock(key);
         return (BaseHook.afterSwap.selector, 0);
     }
 
-    /// @notice Register a pool with the hook by specifying the target active range and yield vaults.
-    /// @dev Vaults must wrap the respective currencies. The pool's current tick determines the
-    ///      initial status (ACTIVE if in range, PARKED otherwise).
     function registerPool(
         PoolKey calldata key,
         int24 lowerTick,
@@ -142,9 +178,6 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         emit PoolRegistered(poolId, lowerTick, upperTick, address(vault0), address(vault1), p.status);
     }
 
-    /// @notice Deposit token0 and token1 in proportion to current reserves; receive shares.
-    /// @dev If pool is PARKED, deposits route straight into vaults so the new capital starts
-    ///      earning yield immediately.
     function deposit(PoolKey calldata key, uint256 amount0, uint256 amount1) external returns (uint256 shares) {
         if (amount0 == 0 && amount1 == 0) revert ZeroDeposit();
 
@@ -158,8 +191,8 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         token0.safeTransferFrom(msg.sender, address(this), amount0);
         token1.safeTransferFrom(msg.sender, address(this), amount1);
 
-        uint256 reserve0Before = _totalReserve0(p);
-        uint256 reserve1Before = _totalReserve1(p);
+        uint256 reserve0Before = _totalReserveSide(poolId, p, true);
+        uint256 reserve1Before = _totalReserveSide(poolId, p, false);
 
         uint256 tokenId = uint256(PoolId.unwrap(poolId));
 
@@ -177,20 +210,19 @@ contract IdleYieldHook is BaseHook, ERC6909 {
             p.totalShares += shares;
         }
 
-        // Park the incoming capital if the pool is currently out-of-range, otherwise hold in hook.
-        if (p.status == Status.PARKED_OUT_OF_RANGE) {
-            _depositToVault(p.vault0, p, amount0, true);
-            _depositToVault(p.vault1, p, amount1, false);
+        p.token0InHook += amount0;
+        p.token1InHook += amount1;
+
+        if (p.status == Status.ACTIVE_IN_RANGE) {
+            _mintAllInHookToV4(key);
         } else {
-            p.token0InHook += amount0;
-            p.token1InHook += amount1;
+            _moveAllInHookToVaults(p);
         }
 
         _mint(msg.sender, tokenId, shares);
         emit Deposited(poolId, msg.sender, amount0, amount1, shares);
     }
 
-    /// @notice Burn shares and receive proportional token0/token1, pulled from wherever capital lives.
     function withdraw(PoolKey calldata key, uint256 shares)
         external
         returns (uint256 amount0, uint256 amount1)
@@ -203,8 +235,13 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         uint256 userShares = balanceOf[msg.sender][tokenId];
         if (shares == 0 || shares > userShares) revert InsufficientShares();
 
-        uint256 reserve0 = _totalReserve0(p);
-        uint256 reserve1 = _totalReserve1(p);
+        // Burn all V4 liquidity into hook custody first so we can serve the redemption.
+        if (p.status == Status.ACTIVE_IN_RANGE && p.liquidityInPool > 0) {
+            _burnAllRangeFromV4(key);
+        }
+
+        uint256 reserve0 = _totalReserveSide(poolId, p, true);
+        uint256 reserve1 = _totalReserveSide(poolId, p, false);
 
         amount0 = (shares * reserve0) / p.totalShares;
         amount1 = (shares * reserve1) / p.totalShares;
@@ -218,37 +255,17 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         ERC20(Currency.unwrap(key.currency0)).safeTransfer(msg.sender, amount0);
         ERC20(Currency.unwrap(key.currency1)).safeTransfer(msg.sender, amount1);
 
+        // If we were ACTIVE, redeploy whatever is left in the hook as LP again.
+        if (p.status == Status.ACTIVE_IN_RANGE && (p.token0InHook > 0 || p.token1InHook > 0)) {
+            _mintAllInHookToV4(key);
+        }
+
         emit Withdrawn(poolId, msg.sender, amount0, amount1, shares);
     }
 
     /// @notice Permissionless trigger to re-evaluate range and park/unpark as needed.
+    /// @dev Uses the unlock+callback path because it's called from non-unlocked context.
     function rebalance(PoolKey calldata key) external {
-        _rebalance(key);
-    }
-
-    function totalReserve0(PoolId poolId) external view returns (uint256) {
-        return _totalReserve0(pools[poolId]);
-    }
-
-    function totalReserve1(PoolId poolId) external view returns (uint256) {
-        return _totalReserve1(pools[poolId]);
-    }
-
-    function _totalReserve0(ManagedPool storage p) internal view returns (uint256) {
-        uint256 fromVault = p.vault0Shares == 0 ? 0 : p.vault0.convertToAssets(p.vault0Shares);
-        return p.token0InHook + fromVault;
-    }
-
-    function _totalReserve1(ManagedPool storage p) internal view returns (uint256) {
-        uint256 fromVault = p.vault1Shares == 0 ? 0 : p.vault1.convertToAssets(p.vault1Shares);
-        return p.token1InHook + fromVault;
-    }
-
-    function _isInRange(int24 tick, int24 lower, int24 upper) internal pure returns (bool) {
-        return tick >= lower && tick < upper;
-    }
-
-    function _rebalance(PoolKey calldata key) internal {
         PoolId poolId = key.toId();
         ManagedPool storage p = pools[poolId];
         if (p.status == Status.UNSET) return;
@@ -257,13 +274,166 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         bool inRange = _isInRange(currentTick, p.lowerTick, p.upperTick);
 
         if (!inRange && p.status == Status.ACTIVE_IN_RANGE) {
-            _park(poolId, p);
+            _parkExternal(key);
         } else if (inRange && p.status == Status.PARKED_OUT_OF_RANGE) {
-            _unpark(poolId, p);
+            _unparkExternal(key);
         }
     }
 
-    function _park(PoolId poolId, ManagedPool storage p) internal {
+    function totalReserve0(PoolId poolId) external view returns (uint256) {
+        return _totalReserveSide(poolId, pools[poolId], true);
+    }
+
+    function totalReserve1(PoolId poolId) external view returns (uint256) {
+        return _totalReserveSide(poolId, pools[poolId], false);
+    }
+
+    function poolShares(PoolId poolId, address user) external view returns (uint256) {
+        return balanceOf[user][uint256(PoolId.unwrap(poolId))];
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                           UNLOCK CALLBACK
+    //////////////////////////////////////////////////////////////*/
+
+    function unlockCallback(bytes calldata raw) external override returns (bytes memory) {
+        require(msg.sender == address(poolManager), "IdleYieldHook: not PoolManager");
+        CallbackData memory data = abi.decode(raw, (CallbackData));
+        if (data.kind == CallbackKind.MINT_TO_RANGE) {
+            _mintAllInHookToV4_inUnlock(data.key);
+        } else if (data.kind == CallbackKind.BURN_ALL_RANGE) {
+            _burnAllRangeFromV4_inUnlock(data.key);
+        }
+        return "";
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                      INTERNAL — RESERVE / RANGE
+    //////////////////////////////////////////////////////////////*/
+
+    function _totalReserveSide(PoolId poolId, ManagedPool storage p, bool isToken0)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 fromVault;
+        uint256 inHook;
+        if (isToken0) {
+            fromVault = p.vault0Shares == 0 ? 0 : p.vault0.convertToAssets(p.vault0Shares);
+            inHook = p.token0InHook;
+        } else {
+            fromVault = p.vault1Shares == 0 ? 0 : p.vault1.convertToAssets(p.vault1Shares);
+            inHook = p.token1InHook;
+        }
+
+        uint256 fromPool;
+        if (p.liquidityInPool > 0) {
+            (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
+            (uint256 amt0, uint256 amt1) = LiquidityAmounts.getAmountsForLiquidity(
+                sqrtPriceX96,
+                TickMath.getSqrtPriceAtTick(p.lowerTick),
+                TickMath.getSqrtPriceAtTick(p.upperTick),
+                p.liquidityInPool
+            );
+            fromPool = isToken0 ? amt0 : amt1;
+        }
+        return inHook + fromVault + fromPool;
+    }
+
+    function _isInRange(int24 tick, int24 lower, int24 upper) internal pure returns (bool) {
+        return tick >= lower && tick < upper;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                       INTERNAL — V4 LP MINT / BURN
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Called from external (non-unlocked) context; goes through unlock.
+    function _mintAllInHookToV4(PoolKey calldata key) internal {
+        poolManager.unlock(abi.encode(CallbackData(CallbackKind.MINT_TO_RANGE, key)));
+    }
+
+    /// @dev Called from external (non-unlocked) context; goes through unlock.
+    function _burnAllRangeFromV4(PoolKey calldata key) internal {
+        poolManager.unlock(abi.encode(CallbackData(CallbackKind.BURN_ALL_RANGE, key)));
+    }
+
+    function _mintAllInHookToV4_inUnlock(PoolKey memory key) internal {
+        PoolId poolId = key.toId();
+        ManagedPool storage p = pools[poolId];
+        uint256 amt0 = p.token0InHook;
+        uint256 amt1 = p.token1InHook;
+        if (amt0 == 0 && amt1 == 0) return;
+
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
+        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(p.lowerTick);
+        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(p.upperTick);
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtLower, sqrtUpper, amt0, amt1);
+        if (liquidity == 0) return;
+
+        (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({
+                tickLower: p.lowerTick,
+                tickUpper: p.upperTick,
+                liquidityDelta: int256(uint256(liquidity)),
+                salt: POSITION_SALT
+            }),
+            ""
+        );
+
+        uint256 used0 = delta.amount0() < 0 ? uint256(int256(-delta.amount0())) : 0;
+        uint256 used1 = delta.amount1() < 0 ? uint256(int256(-delta.amount1())) : 0;
+
+        if (used0 > 0) key.currency0.settle(poolManager, address(this), used0, false);
+        if (used1 > 0) key.currency1.settle(poolManager, address(this), used1, false);
+
+        p.token0InHook -= used0;
+        p.token1InHook -= used1;
+        p.liquidityInPool += liquidity;
+        emit V4LiquidityMinted(poolId, liquidity, used0, used1);
+    }
+
+    function _burnAllRangeFromV4_inUnlock(PoolKey memory key) internal {
+        PoolId poolId = key.toId();
+        ManagedPool storage p = pools[poolId];
+        if (p.liquidityInPool == 0) return;
+
+        uint128 liq = p.liquidityInPool;
+        (BalanceDelta delta, BalanceDelta feesAccrued) = poolManager.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({
+                tickLower: p.lowerTick,
+                tickUpper: p.upperTick,
+                liquidityDelta: -int256(uint256(liq)),
+                salt: POSITION_SALT
+            }),
+            ""
+        );
+        feesAccrued; // fees are folded into delta and routed to the hook
+
+        uint256 got0 = delta.amount0() > 0 ? uint256(int256(delta.amount0())) : 0;
+        uint256 got1 = delta.amount1() > 0 ? uint256(int256(delta.amount1())) : 0;
+
+        if (got0 > 0) key.currency0.take(poolManager, address(this), got0, false);
+        if (got1 > 0) key.currency1.take(poolManager, address(this), got1, false);
+
+        p.liquidityInPool = 0;
+        p.token0InHook += got0;
+        p.token1InHook += got1;
+        emit V4LiquidityBurned(poolId, liq, got0, got1);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                       INTERNAL — PARK / UNPARK
+    //////////////////////////////////////////////////////////////*/
+
+    function _parkExternal(PoolKey calldata key) internal {
+        // Burn V4 LP back into hook custody first (needs unlock since we're outside one).
+        if (pools[key.toId()].liquidityInPool > 0) {
+            _burnAllRangeFromV4(key);
+        }
+        ManagedPool storage p = pools[key.toId()];
         uint256 amount0 = p.token0InHook;
         uint256 amount1 = p.token1InHook;
         if (amount0 > 0) _depositToVault(p.vault0, p, amount0, true);
@@ -271,10 +441,11 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         p.token0InHook = 0;
         p.token1InHook = 0;
         p.status = Status.PARKED_OUT_OF_RANGE;
-        emit Parked(poolId, amount0, amount1);
+        emit Parked(key.toId(), amount0, amount1);
     }
 
-    function _unpark(PoolId poolId, ManagedPool storage p) internal {
+    function _unparkExternal(PoolKey calldata key) internal {
+        ManagedPool storage p = pools[key.toId()];
         uint256 amount0;
         uint256 amount1;
         if (p.vault0Shares > 0) {
@@ -288,7 +459,74 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         p.token0InHook += amount0;
         p.token1InHook += amount1;
         p.status = Status.ACTIVE_IN_RANGE;
+        // Re-deploy as V4 LP
+        if (p.token0InHook > 0 || p.token1InHook > 0) {
+            _mintAllInHookToV4(key);
+        }
+        emit Unparked(key.toId(), amount0, amount1);
+    }
+
+    /// @dev Called from inside afterSwap — already in unlock context, so direct modifyLiquidity.
+    function _rebalanceInUnlock(PoolKey calldata key) internal {
+        PoolId poolId = key.toId();
+        ManagedPool storage p = pools[poolId];
+        if (p.status == Status.UNSET) return;
+
+        (, int24 currentTick,,) = poolManager.getSlot0(poolId);
+        bool inRange = _isInRange(currentTick, p.lowerTick, p.upperTick);
+
+        if (!inRange && p.status == Status.ACTIVE_IN_RANGE) {
+            _parkInUnlock(poolId, p, key);
+        } else if (inRange && p.status == Status.PARKED_OUT_OF_RANGE) {
+            _unparkInUnlock(poolId, p, key);
+        }
+    }
+
+    function _parkInUnlock(PoolId poolId, ManagedPool storage p, PoolKey calldata key) internal {
+        if (p.liquidityInPool > 0) {
+            _burnAllRangeFromV4_inUnlock(key);
+        }
+        uint256 amount0 = p.token0InHook;
+        uint256 amount1 = p.token1InHook;
+        if (amount0 > 0) _depositToVault(p.vault0, p, amount0, true);
+        if (amount1 > 0) _depositToVault(p.vault1, p, amount1, false);
+        p.token0InHook = 0;
+        p.token1InHook = 0;
+        p.status = Status.PARKED_OUT_OF_RANGE;
+        emit Parked(poolId, amount0, amount1);
+    }
+
+    function _unparkInUnlock(PoolId poolId, ManagedPool storage p, PoolKey calldata key) internal {
+        uint256 amount0;
+        uint256 amount1;
+        if (p.vault0Shares > 0) {
+            amount0 = p.vault0.redeem(p.vault0Shares, address(this), address(this));
+            p.vault0Shares = 0;
+        }
+        if (p.vault1Shares > 0) {
+            amount1 = p.vault1.redeem(p.vault1Shares, address(this), address(this));
+            p.vault1Shares = 0;
+        }
+        p.token0InHook += amount0;
+        p.token1InHook += amount1;
+        p.status = Status.ACTIVE_IN_RANGE;
+        if (p.token0InHook > 0 || p.token1InHook > 0) {
+            _mintAllInHookToV4_inUnlock(key);
+        }
         emit Unparked(poolId, amount0, amount1);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          INTERNAL — VAULT IO
+    //////////////////////////////////////////////////////////////*/
+
+    function _moveAllInHookToVaults(ManagedPool storage p) internal {
+        uint256 amt0 = p.token0InHook;
+        uint256 amt1 = p.token1InHook;
+        if (amt0 > 0) _depositToVault(p.vault0, p, amt0, true);
+        if (amt1 > 0) _depositToVault(p.vault1, p, amt1, false);
+        p.token0InHook = 0;
+        p.token1InHook = 0;
     }
 
     function _depositToVault(ERC4626 vault, ManagedPool storage p, uint256 amount, bool isToken0) internal {
@@ -301,8 +539,6 @@ contract IdleYieldHook is BaseHook, ERC6909 {
         }
     }
 
-    /// @notice Withdraw `amount` of the given side from vault first, then top up from hook if shortfall.
-    /// @dev Pulls preferentially from the vault to keep hook balances available for in-range minting later.
     function _pullFromAnywhere(ManagedPool storage p, uint256 amount, bool isToken0) internal {
         if (amount == 0) return;
         ERC4626 vault = isToken0 ? p.vault0 : p.vault1;
@@ -326,9 +562,5 @@ contract IdleYieldHook is BaseHook, ERC6909 {
                 p.token1InHook -= amount;
             }
         }
-    }
-
-    function poolShares(PoolId poolId, address user) external view returns (uint256) {
-        return balanceOf[user][uint256(PoolId.unwrap(poolId))];
     }
 }

@@ -15,6 +15,8 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+
 import {IdleYieldHook} from "../src/IdleYieldHook.sol";
 import {MockYieldVault} from "../src/mocks/MockYieldVault.sol";
 import {BaseTest} from "./utils/BaseTest.sol";
@@ -45,8 +47,10 @@ contract IdleYieldHookTest is BaseTest {
         (currency0, currency1) = deployCurrencyPair();
 
         address flags = address(
-            uint160(Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG)
-                ^ (0x4444 << 144)
+            uint160(
+                Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG
+                    | Hooks.AFTER_SWAP_FLAG
+            ) ^ (0x4444 << 144)
         );
         bytes memory constructorArgs = abi.encode(poolManager);
         deployCodeTo("IdleYieldHook.sol:IdleYieldHook", constructorArgs, flags);
@@ -80,12 +84,12 @@ contract IdleYieldHookTest is BaseTest {
     }
 
     function _status(PoolId id) internal view returns (IdleYieldHook.Status) {
-        (,,,,,,,,, IdleYieldHook.Status status) = hook.pools(id);
+        (,,,,,,,,,, IdleYieldHook.Status status) = hook.pools(id);
         return status;
     }
 
     function _totalShares(PoolId id) internal view returns (uint256 ts) {
-        (,,,,,,,, ts,) = hook.pools(id);
+        (,,,,,,,,, ts,) = hook.pools(id);
     }
 
     function _depositInRange() internal {
@@ -111,13 +115,17 @@ contract IdleYieldHookTest is BaseTest {
         assertEq(uint8(_status(poolId)), uint8(IdleYieldHook.Status.ACTIVE_IN_RANGE));
     }
 
-    function test_deposit_inRange_holdsInHook() public {
+    function test_deposit_inRange_mintsV4Liquidity() public {
         _depositInRange();
-        assertEq(hook.totalReserve0(poolId), 100 ether);
-        assertEq(hook.totalReserve1(poolId), 100 ether);
-        // Nothing routed to vaults yet
+        // V4 LiquidityAmounts.getLiquidityForAmounts rounds down → up to 1-2 wei dust.
+        assertApproxEqAbs(hook.totalReserve0(poolId), 100 ether, 2);
+        assertApproxEqAbs(hook.totalReserve1(poolId), 100 ether, 2);
+        // Vaults stay empty — we're in-range so capital sits as V4 LP.
         assertEq(vault0.totalAssets(), 0);
         assertEq(vault1.totalAssets(), 0);
+        // Liquidity should be live in the V4 pool.
+        (,,,, uint128 liq,,,,,,) = hook.pools(poolId);
+        assertGt(liq, 0);
     }
 
     function test_deposit_firstDepositor_locksMinLiquidity() public {
@@ -233,5 +241,43 @@ contract IdleYieldHookTest is BaseTest {
         vm.expectRevert(IdleYieldHook.PoolNotRegistered.selector);
         vm.prank(alice);
         hook.deposit(other, 1 ether, 1 ether);
+    }
+
+    function test_swap_against_hookLP_accruesFeesToReserves() public {
+        _depositInRange();
+
+        uint256 reserve0Before = hook.totalReserve0(poolId);
+        uint256 reserve1Before = hook.totalReserve1(poolId);
+
+        // Mint and approve tokens for the swap caller (the test contract)
+        MockERC20(Currency.unwrap(currency0)).mint(address(this), 10 ether);
+        MockERC20(Currency.unwrap(currency0)).approve(address(swapRouter), type(uint256).max);
+        MockERC20(Currency.unwrap(currency1)).approve(address(swapRouter), type(uint256).max);
+
+        BalanceDelta delta = swapRouter.swapExactTokensForTokens({
+            amountIn: 1 ether,
+            amountOutMin: 0,
+            zeroForOne: true,
+            poolKey: poolKey,
+            hookData: "",
+            receiver: address(this),
+            deadline: block.timestamp + 1
+        });
+
+        // Swap should have succeeded against the hook's freshly-minted LP
+        assertEq(int256(delta.amount0()), -1 ether);
+        assertGt(int256(delta.amount1()), 0);
+
+        // After the swap, post-swap tick is still in [-600, 600] (small swap), so hook stayed ACTIVE.
+        assertEq(uint8(_status(poolId)), uint8(IdleYieldHook.Status.ACTIVE_IN_RANGE));
+
+        // The 0.3% fee from the swap accrues to the hook's LP position; reserve0 grows by ~0.003 ether
+        // (rounding can make either side bigger depending on direction)
+        uint256 reserve0After = hook.totalReserve0(poolId);
+        uint256 reserve1After = hook.totalReserve1(poolId);
+        // Net value moved into the pool from the swap; reserve0 went up (tokens flowed in)
+        assertGt(reserve0After, reserve0Before);
+        // Total value (in token1 terms) should be >= pre-swap minus a tiny dust window
+        assertLt(reserve1After, reserve1Before);
     }
 }
