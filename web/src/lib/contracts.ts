@@ -13,7 +13,7 @@ export const addresses = {
   permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as Address,
   poolManager: "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32" as Address,
   positionManager: "0xcF1EAFC6928dC385A342E7C6491d371d2871458b" as Address,
-  v4Router: "0xDa00aE15d3A71466517129255255db7c0c0956d3" as Address,
+  v4Router: "0xe4e6cAdE3e2A67F16a5D867c44e1E7Df02F0fC03" as Address,
   vault0: "0x54E7f00A7401130340e81cE6d9B0D02C7C8c7E5d" as Address,
   vault1: "0x09a6133261d993b58324bA3C6d14D93B12BD8CB4" as Address,
   idleYieldHook: "0xc1c27663969645A7bfd53507324227137eE058C0" as Address,

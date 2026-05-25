@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract, useReadContracts, useWriteContract } from "wagmi";
 
-import { erc20Abi, idleYieldHookAbi } from "@/lib/abi";
+import { erc20Abi, idleYieldHookAbi, v4RouterAbi } from "@/lib/abi";
 import { addresses, ZERO } from "@/lib/contracts";
 import { getPoolId, getPoolKey } from "@/lib/pool-id";
 
@@ -164,6 +164,12 @@ function Dashboard() {
           totalShares={totalShares}
         />
         <DepositCard
+          onSuccess={() => {
+            void refetchPool();
+            void refetchReserves();
+          }}
+        />
+        <SwapCard
           onSuccess={() => {
             void refetchPool();
             void refetchReserves();
@@ -366,6 +372,85 @@ function DepositCard({ onSuccess }: { onSuccess: () => void }) {
           : submitting
             ? "Submitting..."
             : `Deposit ${amount || "0"} of each`}
+      </button>
+    </div>
+  );
+}
+
+function SwapCard({ onSuccess }: { onSuccess: () => void }) {
+  const { address } = useAccount();
+  const [amount, setAmount] = useState("0.5");
+  const [zeroForOne, setZeroForOne] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const { writeContractAsync } = useWriteContract();
+
+  async function onSwap() {
+    if (!address) return;
+    setSubmitting(true);
+    try {
+      const amt = parseUnits(amount || "0", 18);
+      const inputToken = zeroForOne ? addresses.token0 : addresses.token1;
+      // approve router for input token
+      await writeContractAsync({
+        address: inputToken,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [addresses.v4Router, amt],
+      });
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+      await writeContractAsync({
+        address: addresses.v4Router,
+        abi: v4RouterAbi,
+        functionName: "swapExactTokensForTokens",
+        args: [
+          amt,
+          0n,
+          zeroForOne,
+          getPoolKey(),
+          "0x",
+          address,
+          deadline,
+        ],
+      });
+      onSuccess();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
+      <div className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+        Demo swap
+      </div>
+      <p className="mt-2 text-xs text-zinc-500">
+        Hit the pool with a real swap. Large amounts will push price out of range — watch the status flip to PARKED.
+      </p>
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
+        <input
+          type="number"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full bg-transparent text-sm text-zinc-100 outline-none"
+          placeholder="0.5"
+          min="0"
+        />
+        <button
+          type="button"
+          onClick={() => setZeroForOne((b) => !b)}
+          className="rounded bg-zinc-800 px-2 py-1 text-[11px] font-medium text-zinc-300 hover:bg-zinc-700"
+        >
+          {zeroForOne ? "IY0 → IY1" : "IY1 → IY0"}
+        </button>
+      </div>
+      <button
+        type="button"
+        disabled={!address || submitting || !amount || Number(amount) <= 0}
+        onClick={onSwap}
+        className="mt-3 w-full rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {!address ? "Connect wallet first" : submitting ? "Swapping..." : `Swap ${amount || "0"}`}
       </button>
     </div>
   );
