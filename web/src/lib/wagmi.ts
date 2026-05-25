@@ -1,7 +1,7 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { http } from "wagmi";
 
-import { xLayerTestnet } from "./chains";
+import { xLayer } from "./chains";
 
 const projectId =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "idle-yield-hook";
@@ -9,9 +9,9 @@ const projectId =
 export const wagmiConfig = getDefaultConfig({
   appName: "IdleYield Hook",
   projectId,
-  chains: [xLayerTestnet],
+  chains: [xLayer],
   transports: {
-    [xLayerTestnet.id]: http(),
+    [xLayer.id]: http(),
   },
   ssr: true,
 });

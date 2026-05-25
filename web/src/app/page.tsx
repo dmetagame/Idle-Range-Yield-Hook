@@ -37,7 +37,7 @@ function Header() {
         <div>
           <div className="text-lg font-semibold tracking-tight">IdleYield Hook</div>
           <div className="text-xs text-zinc-400">
-            Dual-yield Uniswap V4 LP · X Layer testnet
+            Dual-yield Uniswap V4 LP · X Layer mainnet
           </div>
         </div>
       </div>
@@ -82,7 +82,7 @@ function NotDeployedNotice() {
   return (
     <section className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
       <div className="text-sm font-medium text-amber-300">
-        Contracts not yet deployed on X Layer testnet.
+        Contracts not yet deployed on X Layer mainnet.
       </div>
       <p className="mt-2 text-sm text-zinc-300">
         Run the deploy script and patch the printed addresses into{" "}
@@ -92,8 +92,8 @@ function NotDeployedNotice() {
         :
       </p>
       <pre className="mt-3 overflow-x-auto rounded-lg bg-zinc-950 p-3 text-xs text-zinc-300">
-{`forge script script/testing/02_DeployAllToXLayerTestnet.s.sol \\
-  --rpc-url xlayer_testnet --broadcast \\
+{`forge script script/04_DeployToXLayerMainnet.s.sol \\
+  --rpc-url xlayer --broadcast \\
   --account deployer --sender <YOUR_ADDR>`}
       </pre>
     </section>
