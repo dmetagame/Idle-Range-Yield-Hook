@@ -470,6 +470,17 @@ function Footer() {
           source on GitHub
         </a>
       </div>
+      <p className="mt-3 max-w-3xl text-[11px] leading-snug text-zinc-600">
+        <span className="text-zinc-400">Scope note:</span> the on-chain demo shows the
+        ACTIVE half (deposit → V4 LP → swap fees accrue). The PARKED half (vault yield while
+        out-of-range) is covered by the unit test
+        {" "}
+        <code className="rounded bg-zinc-900 px-1 text-zinc-400">
+          test_yieldAccrues_increasesReservesAndSharePrice
+        </code>
+        . Triggering it on-chain via swap requires external LP to absorb the price overshoot
+        — the current hook blocks third-party LP adds by design.
+      </p>
     </footer>
   );
 }
