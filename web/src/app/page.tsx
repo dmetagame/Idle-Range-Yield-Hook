@@ -62,8 +62,8 @@ export default function Page() {
 
 function HeroStrip() {
   return (
-    <section className="rounded-2xl border border-border-subtle bg-bg-card p-8">
-      <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-text-primary md:text-4xl">
+    <section className="rounded-2xl border border-border-subtle bg-bg-card p-5 sm:p-8">
+      <h1 className="max-w-3xl text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl md:text-4xl">
         Concentrated LP capital that never sleeps.
       </h1>
       <p className="mt-3 max-w-3xl text-sm text-text-secondary">
@@ -71,7 +71,7 @@ function HeroStrip() {
         capital sits in ERC-4626 vault shares earning lending yield. One hook, two paths,
         both verifiable on X Layer mainnet.
       </p>
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-5 flex flex-wrap gap-2 sm:mt-6">
         <Pill tone="mint" dot>
           ACTIVE_IN_RANGE · earns swap fees
         </Pill>
@@ -216,31 +216,35 @@ function Dashboard() {
     <section className="mt-8 flex flex-col gap-6" id="pools">
       <PoolTabs mode={mode} onChange={setMode} />
 
-      <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <PoolStatsRail
-          poolId={poolId}
-          fee={selectedConfig.fee}
-          tickSpacing={selectedConfig.tickSpacing}
-          lowerTick={selectedConfig.lowerTick}
-          upperTick={selectedConfig.upperTick}
-          currentTick={currentTick}
-          reserve0={reserve0}
-          reserve1={reserve1}
-          liquidityInPool={liquidityInPool}
-          token0InHook={token0InHook}
-          token1InHook={token1InHook}
-          vault0Shares={vault0Shares}
-          vault1Shares={vault1Shares}
-          vault0Assets={vault0Assets}
-          vault1Assets={vault1Assets}
-        />
-        <MainChartCard
-          mode={mode}
-          status={status}
-          reserve0={reserve0}
-          reserve1={reserve1}
-          series={series}
-        />
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <div className="order-2 lg:order-1">
+          <PoolStatsRail
+            poolId={poolId}
+            fee={selectedConfig.fee}
+            tickSpacing={selectedConfig.tickSpacing}
+            lowerTick={selectedConfig.lowerTick}
+            upperTick={selectedConfig.upperTick}
+            currentTick={currentTick}
+            reserve0={reserve0}
+            reserve1={reserve1}
+            liquidityInPool={liquidityInPool}
+            token0InHook={token0InHook}
+            token1InHook={token1InHook}
+            vault0Shares={vault0Shares}
+            vault1Shares={vault1Shares}
+            vault0Assets={vault0Assets}
+            vault1Assets={vault1Assets}
+          />
+        </div>
+        <div className="order-1 lg:order-2">
+          <MainChartCard
+            mode={mode}
+            status={status}
+            reserve0={reserve0}
+            reserve1={reserve1}
+            series={series}
+          />
+        </div>
       </div>
 
       {mode === "parked" && status === "UNSET" ? (

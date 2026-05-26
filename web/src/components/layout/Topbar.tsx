@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 
 export function Topbar() {
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-6 border-b border-border-subtle bg-bg-base/80 px-6 py-4 backdrop-blur-md">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-bg-base/80 px-4 py-3 backdrop-blur-md sm:gap-6 sm:px-6 sm:py-4">
       <div className="flex items-center gap-3">
         <div className="size-8 rounded-lg bg-gradient-to-br from-accent-mint to-accent-teal shadow-[0_0_24px_var(--accent-mint-glow)]" />
         <div className="text-sm font-semibold uppercase tracking-[0.18em] text-text-primary">

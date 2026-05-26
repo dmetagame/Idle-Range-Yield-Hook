@@ -17,7 +17,7 @@ export function NetworkBadge() {
         }`}
       />
       X Layer
-      <span className="text-text-muted">· chain {xLayer.id}</span>
+      <span className="hidden text-text-muted sm:inline">· chain {xLayer.id}</span>
     </div>
   );
 }

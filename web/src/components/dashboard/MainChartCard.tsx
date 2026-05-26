@@ -61,13 +61,15 @@ export function MainChartCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-start justify-between gap-4 px-6 pt-6">
-        <div>
-          <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.16em] text-text-muted">
+      <div className="flex flex-col gap-4 px-5 pt-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:pt-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase tracking-[0.16em] text-text-muted">
             <Pill tone={statusTone} dot active>
               {status.replace(/_/g, " ")}
             </Pill>
-            <span>{mode === "active" ? "Reserve total · IY0 + IY1" : "Vault claim · IY0 + IY1"}</span>
+            <span className="truncate">
+              {mode === "active" ? "Reserve total · IY0 + IY1" : "Vault claim · IY0 + IY1"}
+            </span>
           </div>
           <div className="mt-3">
             <BigStat
@@ -88,13 +90,15 @@ export function MainChartCard({
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-3">
+        <div className="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-end">
           {right}
-          <TimeRangePills value={range} onChange={setRange} />
+          <div className="overflow-x-auto">
+            <TimeRangePills value={range} onChange={setRange} />
+          </div>
         </div>
       </div>
 
-      <div className="px-2 pb-2 pt-6 sm:px-4">
+      <div className="px-1 pb-2 pt-6 sm:px-4">
         <ReserveChart data={filtered} />
       </div>
     </Card>
