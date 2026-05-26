@@ -3,7 +3,6 @@
 import {
   Area,
   AreaChart,
-  CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -21,17 +20,16 @@ export type ReservePoint = {
 export function ReserveChart({ data }: { data: ReservePoint[] }) {
   const hasData = data.length > 0;
   return (
-    <div className="relative h-64 w-full">
+    <div className="relative h-72 w-full">
       {hasData ? (
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="reserveFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent-mint)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="var(--accent-mint)" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.18} />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
             <XAxis
               dataKey="t"
               type="number"
@@ -42,29 +40,33 @@ export function ReserveChart({ data }: { data: ReservePoint[] }) {
                   minute: "2-digit",
                 })
               }
-              stroke="rgba(255,255,255,0.16)"
-              tick={{ fill: "var(--text-faint)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+              stroke="transparent"
+              tick={{ fill: "var(--neutral-500)", fontSize: 11, fontFamily: "var(--font-mono)" }}
               axisLine={false}
               tickLine={false}
+              dy={6}
             />
             <YAxis
               dataKey="total"
-              stroke="rgba(255,255,255,0.16)"
-              tick={{ fill: "var(--text-faint)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+              stroke="transparent"
+              tick={{ fill: "var(--neutral-500)", fontSize: 11, fontFamily: "var(--font-mono)" }}
               axisLine={false}
               tickLine={false}
               domain={["auto", "auto"]}
               width={56}
-              tickFormatter={(v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 })}
+              tickFormatter={(v) =>
+                Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 })
+              }
             />
             <Tooltip
-              cursor={{ stroke: "rgba(61,255,142,0.3)", strokeDasharray: "3 3" }}
+              cursor={{ stroke: "rgba(255,255,255,0.16)" }}
               contentStyle={{
-                background: "var(--bg-card)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: 8,
+                background: "var(--neutral-900)",
+                border: "1px solid var(--neutral-700)",
+                borderRadius: 12,
                 fontSize: 12,
-                color: "var(--text-primary)",
+                color: "var(--neutral-0)",
+                padding: "8px 12px",
               }}
               labelFormatter={(t) => new Date(Number(t) * 1000).toLocaleString()}
               formatter={(value) => [
@@ -77,21 +79,27 @@ export function ReserveChart({ data }: { data: ReservePoint[] }) {
             <Area
               type="monotone"
               dataKey="total"
-              stroke="var(--accent-mint)"
-              strokeWidth={2}
+              stroke="var(--accent)"
+              strokeWidth={1.5}
               fill="url(#reserveFill)"
               dot={false}
+              activeDot={{
+                r: 3,
+                fill: "var(--accent)",
+                stroke: "var(--neutral-900)",
+                strokeWidth: 2,
+              }}
               isAnimationActive={false}
             />
           </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-subtle text-center">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+          <div className="font-mono text-[12px] uppercase tracking-wide text-neutral-500">
             Awaiting first read
           </div>
-          <p className="max-w-xs text-[12px] text-text-faint">
-            The chart fills in as on-chain reads land. Live since this session — no fake history.
+          <p className="max-w-xs text-[13px] text-neutral-500">
+            Live since this session. No fake history.
           </p>
         </div>
       )}

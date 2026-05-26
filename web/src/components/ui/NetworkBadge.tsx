@@ -4,20 +4,17 @@ import { useAccount } from "wagmi";
 
 import { xLayer } from "@/lib/chains";
 
+/**
+ * Only renders when the user is connected to the wrong chain.
+ * On the correct chain we say nothing — the connect button is already authoritative.
+ */
 export function NetworkBadge() {
   const { isConnected, chainId } = useAccount();
-  const onCorrect = chainId === xLayer.id;
-  const live = isConnected && onCorrect;
+  if (!isConnected || chainId === xLayer.id) return null;
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-white/[0.02] px-3 py-1.5 text-[11px] font-medium text-text-secondary">
-      <span
-        aria-hidden
-        className={`size-1.5 rounded-full ${
-          live ? "bg-accent-mint shadow-[0_0_8px_var(--accent-mint)]" : "bg-text-muted"
-        }`}
-      />
-      X Layer
-      <span className="hidden text-text-muted sm:inline">· chain {xLayer.id}</span>
+    <div className="inline-flex items-center gap-2 rounded-xl border border-negative/40 bg-negative/5 px-3 py-1.5 text-[13px] text-negative">
+      <span aria-hidden className="size-1.5 rounded-full bg-negative" />
+      Switch to X Layer
     </div>
   );
 }

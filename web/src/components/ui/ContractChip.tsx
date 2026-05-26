@@ -28,35 +28,33 @@ export function ContractChip({
   }
   const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
   return (
-    <span
+    <div
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-border-subtle bg-white/[0.02] px-3 py-1 text-[11px]",
+        "flex items-center justify-between gap-3 py-2 text-[13px]",
         className,
       )}
     >
-      <span className="text-text-muted">{label}</span>
-      <span className="font-mono text-text-secondary">{short}</span>
-      <button
-        type="button"
-        onClick={onCopy}
-        className="text-text-muted transition-colors hover:text-accent-mint"
-        aria-label={`Copy ${label} address`}
-      >
-        {copied ? (
-          <Check className="size-3.5" strokeWidth={2} />
-        ) : (
-          <Copy className="size-3.5" strokeWidth={1.5} />
-        )}
-      </button>
-      <a
-        href={`${EXPLORER}/${address}`}
-        target="_blank"
-        rel="noreferrer"
-        className="text-text-muted transition-colors hover:text-accent-mint"
-        aria-label={`View ${label} on OKLink`}
-      >
-        <ExternalLink className="size-3.5" strokeWidth={1.5} />
-      </a>
-    </span>
+      <span className="text-neutral-300">{label}</span>
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-neutral-50">{short}</span>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="text-neutral-500 transition-colors hover:text-neutral-0"
+          aria-label={`Copy ${label} address`}
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </button>
+        <a
+          href={`${EXPLORER}/${address}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-neutral-500 transition-colors hover:text-neutral-0"
+          aria-label={`View ${label} on OKLink`}
+        >
+          <ExternalLink className="size-3.5" />
+        </a>
+      </div>
+    </div>
   );
 }

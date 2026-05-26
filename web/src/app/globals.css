@@ -1,29 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  /* Surfaces */
-  --bg-base: #0a0f0d;
-  --bg-card: #0f1613;
-  --bg-card-hover: #131c19;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.12);
+  /* Neutral scale */
+  --neutral-0: #ffffff;
+  --neutral-50: #f4f5f4;
+  --neutral-300: #8a8f8c;
+  --neutral-500: #555956;
+  --neutral-700: #232826;
+  --neutral-900: #0a0c0b;
 
-  /* Accents */
-  --accent-mint: #3dff8e;
-  --accent-mint-dim: #2bcf72;
-  --accent-mint-glow: rgba(61, 255, 142, 0.18);
-  --accent-teal: #3ddfff;
+  /* Single accent + a single negative */
+  --accent: #3dff8e;
+  --negative: #ff6b6b;
 
-  /* Typography */
-  --text-primary: #e8efea;
-  --text-secondary: #b6c1bb;
-  --text-muted: #6b7872;
-  --text-faint: #4a544f;
+  /* Spacing scale (8px base; only these get used) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-20: 80px;
+  --space-32: 128px;
 
-  /* Status */
-  --positive: #3dff8e;
-  --negative: #ff5e5e;
-  --warning: #ffc23d;
+  /* Radii — two only */
+  --radius-md: 12px;
+  --radius-lg: 16px;
 
   --font-sans:
     var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -32,24 +35,15 @@
 }
 
 @theme inline {
-  --color-bg-base: var(--bg-base);
-  --color-bg-card: var(--bg-card);
-  --color-bg-card-hover: var(--bg-card-hover);
-  --color-border-subtle: var(--border-subtle);
-  --color-border-strong: var(--border-strong);
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-900: var(--neutral-900);
 
-  --color-accent-mint: var(--accent-mint);
-  --color-accent-mint-dim: var(--accent-mint-dim);
-  --color-accent-teal: var(--accent-teal);
-
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-muted: var(--text-muted);
-  --color-text-faint: var(--text-faint);
-
-  --color-positive: var(--positive);
+  --color-accent: var(--accent);
   --color-negative: var(--negative);
-  --color-warning: var(--warning);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -57,41 +51,18 @@
 
 html,
 body {
-  background: var(--bg-base);
-  color: var(--text-primary);
+  background: var(--neutral-900);
+  color: var(--neutral-50);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Atmospheric diagonal mint streaks — ambient lighting, not foreground. */
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  inset: -25%;
-  z-index: 0;
-  pointer-events: none;
-  filter: blur(120px);
-  opacity: 0.6;
-}
-body::before {
-  background: linear-gradient(135deg, transparent 35%, var(--accent-mint-glow) 50%, transparent 65%);
-  transform: translate(-20%, -30%) rotate(-18deg);
-}
-body::after {
-  background: linear-gradient(135deg, transparent 35%, var(--accent-mint-glow) 50%, transparent 65%);
-  transform: translate(25%, 30%) rotate(-18deg);
-}
-
-body > * {
-  position: relative;
-  z-index: 1;
-}
-
 ::selection {
-  background: var(--accent-mint-glow);
-  color: var(--text-primary);
+  background: rgba(61, 255, 142, 0.18);
+  color: var(--neutral-0);
 }
 
 ::-webkit-scrollbar {
@@ -106,5 +77,5 @@ body > * {
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(61, 255, 142, 0.22);
+  background: rgba(255, 255, 255, 0.12);
 }
