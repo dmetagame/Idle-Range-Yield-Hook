@@ -10,12 +10,17 @@ export type PoolKey = {
   hooks: Address;
 };
 
-export function getPoolKey(): PoolKey {
+export type PoolConfig = {
+  fee: number;
+  tickSpacing: number;
+};
+
+export function getPoolKey(config: PoolConfig = poolConfig): PoolKey {
   return {
     currency0: addresses.token0,
     currency1: addresses.token1,
-    fee: poolConfig.fee,
-    tickSpacing: poolConfig.tickSpacing,
+    fee: config.fee,
+    tickSpacing: config.tickSpacing,
     hooks: addresses.idleYieldHook,
   };
 }

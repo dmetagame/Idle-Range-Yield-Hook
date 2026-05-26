@@ -28,12 +28,12 @@ numbers ticking up.
 > Reserves grew from 2.000 to 2.049 across the test swaps — visible on-chain."
 
 ### 1:05–1:25 · The parked half (visual: OKX explorer showing hook contract + test output)
-**Action:** Show the OKLink explorer page for the hook. Optionally show
-`forge test --match-test test_yieldAccrues_increasesReservesAndSharePrice -vv` passing.
+**Action:** Switch the dApp to **Vault demo**. If needed, click **Initialize vault demo**,
+then deposit, mint a small amount of mock yield, and click **Accrue yield**.
 **Voiceover:**
-> "Out-of-range, the hook switches to vault yield. Capital becomes claim-on-vault-shares,
-> compounding lending yield until price comes back. Demonstrated end-to-end in unit tests
-> against a forked V4 PoolManager."
+> "The second pool is initialized out of range against the same deployed hook. Deposits
+> route directly into ERC-4626 vault shares, and accruing yield raises the reserves
+> claimable by depositors. This proves the parked path on-chain, not just in tests."
 
 ### 1:25–1:30 · Outro
 **Voiceover:**
@@ -75,14 +75,22 @@ unchanged for any ERC-20 pair on any V4 pool that wants the dual-yield property.
 
 ### Completion
 - **Deployed on X Layer mainnet:** hook at
-  `0xc1c27663969645A7bfd53507324227137eE058C0`, two vaults, one V4 pool initialised + registered.
+  `0xc1c27663969645A7bfd53507324227137eE058C0`, two vaults, one active V4 pool initialized
+  and registered, plus a dApp/script path to initialize the parked vault-demo pool.
 - **Live dApp:** https://idle-yield-hook.vercel.app — Wagmi/RainbowKit, connects to chain
-  196, deposit/swap/read-state flows work end-to-end.
-- **Tests:** 21 unit tests pass covering ERC-6909 share math, V4 LP mint/burn via unlock
+  196, with Fee pool and Vault demo modes, mock-token minting, deposit, swap, and vault-yield
+  actions.
+- **Tests:** 19 Foundry tests pass covering ERC-6909 share math, V4 LP mint/burn via unlock
   callback, park/unpark transitions, and vault yield accrual.
 - **On-chain proof:** 9 real swaps grew reserves from 2.000 → 2.049 across the registered
   range. PoolId
   `0x12649fe7126956cb19e7ab3148a913b9238eb04e2f68dc8a3bdd0d90b62ddb53`.
+- **Parked proof path:** Vault demo pool config is `fee=500`, `tickSpacing=10`, initialized
+  at tick `+5000`, PoolId
+  `0x32904e198828cf60f761ffcafc24a56d31c6a93a542c307dab4d7f2919e0f5ae`. Deposits land in
+  vault shares and mock yield raises `convertToAssets(vaultShares)`.
+- **Aave-ready integration:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave V3
+  reserve behind the same ERC-4626 surface used by the hook.
 
 ### Source code
 https://github.com/dmetagame/Idle-Range-Yield-Hook
@@ -91,12 +99,11 @@ https://github.com/dmetagame/Idle-Range-Yield-Hook
 https://idle-yield-hook.vercel.app
 
 ### Honest scope note
-The PARKED transition is structurally unreachable on-chain via swap with the current design
-because the hook owns the only LP in its pool — V4's swap math reverts before tick can
-cross the boundary into empty range. The PARKED path's vault deposit, yield accrual, and
-share-price growth is covered by the passing unit test
-`test_yieldAccrues_increasesReservesAndSharePrice`. A v2 design would allow external LP to
-absorb price overshoot, or expose a permissioned `forcePark()` for keepers.
+The original active fee pool cannot naturally cross into PARKED by swap because the hook
+owns the only LP in that pool. To make the parked/yield path live for judging without
+redeploying the hook, the dApp includes a second out-of-range V4 pool registered to the same
+hook and vaults. A v2 production design should add absorber liquidity around the managed
+range so one pool can cross, park, and unpark naturally.
 
 ---
 

@@ -1,9 +1,9 @@
 # Idle-Range Yield Hook
 
-> Concentrated LP capital that never sleeps. In-range, your tokens earn V4 swap fees as a
-> hook-owned liquidity position. Out-of-range, the hook atomically routes capital into an
-> ERC-4626 vault to earn lending yield. Re-enters the pool the moment a swap pushes price
-> back into range — no keeper, no rebalancing bot.
+> Concentrated LP capital that never sleeps. The live dApp now separates the mechanism into
+> two verifiable X Layer pools: an active V4 LP pool that accrues swap fees, and an
+> out-of-range vault demo pool where deposits immediately become ERC-4626 shares and yield
+> raises depositor reserves.
 
 Built for the **X Layer Build X Hackathon 2026** (Uniswap V4 Hook track).
 
@@ -62,23 +62,31 @@ price for existing depositors.
 Pool: `fee=3000` (0.30%), `tickSpacing=60`, target range `[-960, +960]` (~±10% around 1:1).
 PoolId: `0x12649fe7126956cb19e7ab3148a913b9238eb04e2f68dc8a3bdd0d90b62ddb53`.
 
+Vault demo pool: `fee=500` (0.05%), `tickSpacing=10`, initialized at tick `+5000`, same
+target range `[-960, +960]`.
+PoolId: `0x32904e198828cf60f761ffcafc24a56d31c6a93a542c307dab4d7f2919e0f5ae`.
+
+The vault demo pool can be initialized either from the dApp or via
+`script/06_RegisterParkedDemoPool.s.sol`; it uses the already deployed hook, tokens, and
+vaults.
+
 ## Run the demo
 
 1. Visit https://idle-yield-hook.vercel.app
 2. Connect any EVM wallet, switch to X Layer mainnet (chain 196). The faucet/buy is via OKX
    if you need OKB for gas (deploy script costs ~0.0004 OKB).
-3. Mint yourself IY0 and IY1 — both tokens expose a public `mint(to, amount)` because
-   they're `MockERC20` from Solmate. Easiest:
-   `cast send <IY0> "mint(address,uint256)" <you> 10ether --rpc-url https://rpc.xlayer.tech --account deployer`
-4. Click **Deposit** in the dApp to put both sides in. Status flips to LP-active.
-5. Click **Swap** a few times to push tick through the range. Reserves grow with fee
+3. Use the **Test tokens** card to mint IY0 and IY1 to your wallet.
+4. In **Fee pool**, click **Deposit**, then **Swap** a few times. Reserves grow with fee
    accrual on every swap (proven on-chain: 9 swaps moved reserves from 2.000 → 2.049).
+5. Switch to **Vault demo**. If it shows `UNSET`, click **Initialize vault demo** once.
+6. Deposit into the vault demo, then click **Accrue yield**. The pool's vault-share assets
+   and claimable reserves increase on-chain.
 
 ## Build + test locally
 
 ```bash
 forge install
-forge test         # 21 unit tests cover share math, V4 LP mint/burn, park/unpark, yield accrual
+forge test         # 19 tests cover share math, V4 LP mint/burn, park/unpark, yield accrual
 
 # Deploy to mainnet:
 forge script script/04_DeployToXLayerMainnet.s.sol \
@@ -87,6 +95,10 @@ forge script script/04_DeployToXLayerMainnet.s.sol \
 # Deploy the hookmate V4Router so the dApp's swap card works:
 forge script script/05_DeployRouter.s.sol \
   --rpc-url xlayer --broadcast --account deployer --sender <YOUR_ADDR>
+
+# Register the optional out-of-range vault demo pool against the existing hook:
+forge script script/06_RegisterParkedDemoPool.s.sol \
+  --rpc-url xlayer --broadcast --account deployer --sender <YOUR_ADDR>
 ```
 
 `foundry.toml` ships `optimizer_runs = 1` because the hook is right at EIP-170's 24 KB
@@ -94,19 +106,18 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
 
 ## Honest scope notes
 
-- **PARKED transition is not reachable on-chain via swap with the current design.** The
-  hook owns the *only* LP in its pool (because `_beforeAddLiquidity` reverts non-self
-  adds), and V4's swap math underflows before tick can cross the LP boundary into an empty
-  range. The PARKED path — vault routing, yield accrual, share-price growth — is fully
-  covered by the unit test
-  [`test_yieldAccrues_increasesReservesAndSharePrice`](test/IdleYieldHook.t.sol). A v2
-  design would allow external LP to absorb the price overshoot, or expose a permissioned
-  `forcePark()` for keepers.
+- The original fee pool still cannot transition from `ACTIVE` to `PARKED` via a boundary
+  crossing swap because the hook owns the only LP in that pool. The dApp now adds a second
+  out-of-range pool that uses the same deployed hook and vaults, so the parked deposit,
+  vault-share accounting, and yield-accrual path are live on-chain instead of unit-test
+  only. A v2 production design should add absorber liquidity around the managed range so a
+  single pool can cross and park naturally.
 - Tokens (IY0/IY1) are `MockERC20`s with a public mint. They're stand-ins for a real pair
   (WETH/USDC) — the mechanism is identical and judges can interact freely without bridging.
 - `MockYieldVault.accrueYield(amount)` simulates lending yield by pulling token from the
   caller. In production this would be replaced with a wrapper over a real X Layer lending
-  market (Aave-fork / Compound-fork) — the ERC-4626 surface stays the same.
+  market. `src/integrations/AaveV3ERC4626Adapter.sol` is included as the Aave V3 ERC-4626
+  adapter surface for that replacement.
 
 ## License
 

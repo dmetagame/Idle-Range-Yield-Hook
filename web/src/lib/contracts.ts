@@ -19,12 +19,24 @@ export const addresses = {
   idleYieldHook: "0xc1c27663969645A7bfd53507324227137eE058C0" as Address,
 } as const;
 
-/// PoolKey parameters that match the deploy script.
-export const poolConfig = {
+/// PoolKey parameters that match the deployed fee-accrual pool.
+export const activePoolConfig = {
   fee: 3000,
   tickSpacing: 60,
   lowerTick: -960,
   upperTick: 960,
 };
+
+/// Optional judge/demo pool: initialized out-of-range so deposits route directly
+/// to the ERC-4626 vaults using the already deployed hook and vault contracts.
+export const parkedDemoPoolConfig = {
+  fee: 500,
+  tickSpacing: 10,
+  lowerTick: -960,
+  upperTick: 960,
+  initialSqrtPriceX96: 101729702841318637793976746270n, // TickMath.getSqrtPriceAtTick(5000)
+};
+
+export const poolConfig = activePoolConfig;
 
 export type DeployedAddresses = typeof addresses;

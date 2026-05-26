@@ -49,6 +49,29 @@ export const idleYieldHookAbi = [
   {
     type: "function",
     stateMutability: "nonpayable",
+    name: "registerPool",
+    inputs: [
+      {
+        name: "key",
+        type: "tuple",
+        components: [
+          { name: "currency0", type: "address" },
+          { name: "currency1", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "tickSpacing", type: "int24" },
+          { name: "hooks", type: "address" },
+        ],
+      },
+      { name: "lowerTick", type: "int24" },
+      { name: "upperTick", type: "int24" },
+      { name: "vault0", type: "address" },
+      { name: "vault1", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    stateMutability: "nonpayable",
     name: "deposit",
     inputs: [
       {
@@ -133,6 +156,39 @@ export const erc20Abi = [
       { name: "amount", type: "uint256" },
     ],
     outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    stateMutability: "nonpayable",
+    name: "mint",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+export const poolManagerAbi = [
+  {
+    type: "function",
+    stateMutability: "nonpayable",
+    name: "initialize",
+    inputs: [
+      {
+        name: "key",
+        type: "tuple",
+        components: [
+          { name: "currency0", type: "address" },
+          { name: "currency1", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "tickSpacing", type: "int24" },
+          { name: "hooks", type: "address" },
+        ],
+      },
+      { name: "sqrtPriceX96", type: "uint160" },
+    ],
+    outputs: [{ name: "tick", type: "int24" }],
   },
 ] as const;
 
