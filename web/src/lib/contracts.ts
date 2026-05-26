@@ -17,6 +17,8 @@ export const addresses = {
   vault0: "0x54E7f00A7401130340e81cE6d9B0D02C7C8c7E5d" as Address,
   vault1: "0x09a6133261d993b58324bA3C6d14D93B12BD8CB4" as Address,
   idleYieldHook: "0xc1c27663969645A7bfd53507324227137eE058C0" as Address,
+  // Uniswap V4 canonical StateView helper on X Layer mainnet — read-only.
+  stateView: "0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990" as Address,
 } as const;
 
 /// PoolKey parameters that match the deployed fee-accrual pool.
