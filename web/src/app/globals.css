@@ -1,26 +1,110 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --bg-base: #0a0f0d;
+  --bg-card: #0f1613;
+  --bg-card-hover: #131c19;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Accents */
+  --accent-mint: #3dff8e;
+  --accent-mint-dim: #2bcf72;
+  --accent-mint-glow: rgba(61, 255, 142, 0.18);
+  --accent-teal: #3ddfff;
+
+  /* Typography */
+  --text-primary: #e8efea;
+  --text-secondary: #b6c1bb;
+  --text-muted: #6b7872;
+  --text-faint: #4a544f;
+
+  /* Status */
+  --positive: #3dff8e;
+  --negative: #ff5e5e;
+  --warning: #ffc23d;
+
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg-base: var(--bg-base);
+  --color-bg-card: var(--bg-card);
+  --color-bg-card-hover: var(--bg-card-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+
+  --color-accent-mint: var(--accent-mint);
+  --color-accent-mint-dim: var(--accent-mint-dim);
+  --color-accent-teal: var(--accent-teal);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Atmospheric diagonal mint streaks — ambient lighting, not foreground. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(120px);
+  opacity: 0.6;
+}
+body::before {
+  background: linear-gradient(135deg, transparent 35%, var(--accent-mint-glow) 50%, transparent 65%);
+  transform: translate(-20%, -30%) rotate(-18deg);
+}
+body::after {
+  background: linear-gradient(135deg, transparent 35%, var(--accent-mint-glow) 50%, transparent 65%);
+  transform: translate(25%, 30%) rotate(-18deg);
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: var(--accent-mint-glow);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(61, 255, 142, 0.22);
 }

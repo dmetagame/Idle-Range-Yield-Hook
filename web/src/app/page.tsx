@@ -1,6 +1,5 @@
 "use client";
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import {
@@ -11,6 +10,7 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { DashboardShell } from "@/components/layout/DashboardShell";
 import {
   erc20Abi,
   idleYieldHookAbi,
@@ -54,29 +54,10 @@ const POOL_MODES = {
 
 export default function Page() {
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
-      <Header />
+    <DashboardShell>
       <Hero />
       {HOOK_NOT_DEPLOYED ? <NotDeployedNotice /> : <Dashboard />}
-      <Footer />
-    </div>
-  );
-}
-
-function Header() {
-  return (
-    <header className="flex items-center justify-between pb-8">
-      <div className="flex items-center gap-3">
-        <div className="size-9 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500" />
-        <div>
-          <div className="text-lg font-semibold tracking-tight">IdleYield Hook</div>
-          <div className="text-xs text-zinc-400">
-            Dual-yield Uniswap V4 LP · X Layer mainnet
-          </div>
-        </div>
-      </div>
-      <ConnectButton chainStatus="icon" accountStatus="address" />
-    </header>
+    </DashboardShell>
   );
 }
 
@@ -791,29 +772,6 @@ function YieldCard({
               : `Accrue ${amount || "0"}`}
       </button>
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="mt-12 border-t border-zinc-900 pt-6 text-xs text-zinc-500">
-      <div>
-        Built for the X Layer Build X Hackathon 2026 ·{" "}
-        <a
-          href="https://github.com/dmetagame/Idle-Range-Yield-Hook"
-          target="_blank"
-          rel="noreferrer"
-          className="text-zinc-300 hover:text-emerald-400"
-        >
-          source on GitHub
-        </a>
-      </div>
-      <p className="mt-3 max-w-3xl text-[11px] leading-snug text-zinc-600">
-        The fee pool demonstrates live V4 swap-fee growth. The vault demo pool is
-        initialized out of range so the same deployed hook routes deposits into ERC-4626
-        vault shares and shows share-price growth on-chain.
-      </p>
-    </footer>
   );
 }
 
