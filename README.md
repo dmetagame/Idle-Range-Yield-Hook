@@ -119,6 +119,30 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
   market. `src/integrations/AaveV3ERC4626Adapter.sol` is included as the Aave V3 ERC-4626
   adapter surface for that replacement.
 
+## Integrations added
+
+- **OKLink verification:** the dApp links the hook, pool IDs, and local transaction receipts
+  straight to OKLink so judges can follow every action on X Layer.
+- **OKX Wallet / DEX:** the dApp now includes the official OKX Wallet entry point, OKX DEX
+  swap page, and an OKX DEX Swap API URL scaffold for chain `196`.
+- **Aave V3 path:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave reserve as
+  ERC-4626, and `script/07_DeployAaveAdapters.s.sol` deploys two adapters from verified
+  env-provided market addresses:
+
+```bash
+AAVE_V3_POOL=<official-aave-pool> \
+AAVE_ASSET0=<underlying-token-0> \
+AAVE_ATOKEN0=<a-token-0> \
+AAVE_ASSET1=<underlying-token-1> \
+AAVE_ATOKEN1=<a-token-1> \
+forge script script/07_DeployAaveAdapters.s.sol \
+  --rpc-url xlayer --broadcast --account deployer --sender <YOUR_ADDR>
+```
+
+As of the last integration pass, the public Aave deployment list did not yet show X Layer,
+while the Aave governance forum had an active X Layer deployment discussion. For that
+reason the repo keeps Aave addresses configurable instead of hardcoding unofficial values.
+
 ## License
 
 MIT, same as the upstream Uniswap v4 template.

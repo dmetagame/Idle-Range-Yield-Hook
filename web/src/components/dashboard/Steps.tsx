@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { parseUnits } from "viem";
+import { parseUnits, type Hex } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { Button } from "@/components/ui/Button";
@@ -24,12 +24,14 @@ export function Steps({
   status,
   yieldEnabled,
   onSuccess,
+  onReceipt,
 }: {
   poolMode: "active" | "parked";
   poolKey: PoolKey;
   status: Status;
   yieldEnabled: boolean;
   onSuccess: () => void;
+  onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const needsInit = poolMode === "parked" && status === "UNSET";
 
@@ -41,22 +43,34 @@ export function Steps({
 
       <div className="mt-6 border-t border-neutral-700">
         {needsInit ? (
-          <InitializeStep n={1} poolKey={poolKey} onSuccess={onSuccess} />
+          <InitializeStep
+            n={1}
+            poolKey={poolKey}
+            onSuccess={onSuccess}
+            onReceipt={onReceipt}
+          />
         ) : null}
-        <MintStep n={needsInit ? 2 : 1} />
+        <MintStep n={needsInit ? 2 : 1} onReceipt={onReceipt} />
         <DepositStep
           n={needsInit ? 3 : 2}
           poolKey={poolKey}
           status={status}
           onSuccess={onSuccess}
+          onReceipt={onReceipt}
         />
         {poolMode === "active" ? (
-          <SwapStep n={needsInit ? 4 : 3} poolKey={poolKey} onSuccess={onSuccess} />
+          <SwapStep
+            n={needsInit ? 4 : 3}
+            poolKey={poolKey}
+            onSuccess={onSuccess}
+            onReceipt={onReceipt}
+          />
         ) : (
           <YieldStep
             n={needsInit ? 4 : 3}
             enabled={yieldEnabled}
             onSuccess={onSuccess}
+            onReceipt={onReceipt}
           />
         )}
       </div>
@@ -101,7 +115,13 @@ function StepRow({
   );
 }
 
-function MintStep({ n }: { n: number }) {
+function MintStep({
+  n,
+  onReceipt,
+}: {
+  n: number;
+  onReceipt: (receipt: { label: string; hash: Hex }) => void;
+}) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("25");
   const [submitting, setSubmitting] = useState(false);
@@ -120,6 +140,7 @@ function MintStep({ n }: { n: number }) {
         args: [address, amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: h0 });
+      onReceipt({ label: "Mint IY0", hash: h0 });
       const h1 = await writeContractAsync({
         address: addresses.token1,
         abi: erc20Abi,
@@ -127,6 +148,7 @@ function MintStep({ n }: { n: number }) {
         args: [address, amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: h1 });
+      onReceipt({ label: "Mint IY1", hash: h1 });
     } finally {
       setSubmitting(false);
     }
@@ -155,11 +177,13 @@ function DepositStep({
   poolKey,
   status,
   onSuccess,
+  onReceipt,
 }: {
   n: number;
   poolKey: PoolKey;
   status: Status;
   onSuccess: () => void;
+  onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("10");
@@ -193,6 +217,7 @@ function DepositStep({
         args: [poolKey, amt, amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: d });
+      onReceipt({ label: "Deposit", hash: d });
       onSuccess();
     } finally {
       setSubmitting(false);
@@ -232,10 +257,12 @@ function SwapStep({
   n,
   poolKey,
   onSuccess,
+  onReceipt,
 }: {
   n: number;
   poolKey: PoolKey;
   onSuccess: () => void;
+  onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("0.5");
@@ -265,6 +292,7 @@ function SwapStep({
         args: [amt, 0n, zeroForOne, poolKey, "0x", address, deadline],
       });
       await publicClient?.waitForTransactionReceipt({ hash: s });
+      onReceipt({ label: zeroForOne ? "Swap IY0 -> IY1" : "Swap IY1 -> IY0", hash: s });
       onSuccess();
     } finally {
       setSubmitting(false);
@@ -307,10 +335,12 @@ function YieldStep({
   n,
   enabled,
   onSuccess,
+  onReceipt,
 }: {
   n: number;
   enabled: boolean;
   onSuccess: () => void;
+  onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("0.25");
@@ -337,6 +367,7 @@ function YieldStep({
         args: [amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: ac0 });
+      onReceipt({ label: "Accrue yIY0", hash: ac0 });
       const a1 = await writeContractAsync({
         address: addresses.token1,
         abi: erc20Abi,
@@ -351,6 +382,7 @@ function YieldStep({
         args: [amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: ac1 });
+      onReceipt({ label: "Accrue yIY1", hash: ac1 });
       onSuccess();
     } finally {
       setSubmitting(false);
@@ -386,10 +418,12 @@ function InitializeStep({
   n,
   poolKey,
   onSuccess,
+  onReceipt,
 }: {
   n: number;
   poolKey: PoolKey;
   onSuccess: () => void;
+  onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
   const [submitting, setSubmitting] = useState(false);
@@ -407,6 +441,7 @@ function InitializeStep({
         args: [poolKey, parkedDemoPoolConfig.initialSqrtPriceX96],
       });
       await publicClient?.waitForTransactionReceipt({ hash: init });
+      onReceipt({ label: "Initialize parked pool", hash: init });
       const reg = await writeContractAsync({
         address: addresses.idleYieldHook,
         abi: idleYieldHookAbi,
@@ -420,6 +455,7 @@ function InitializeStep({
         ],
       });
       await publicClient?.waitForTransactionReceipt({ hash: reg });
+      onReceipt({ label: "Register parked pool", hash: reg });
       onSuccess();
     } finally {
       setSubmitting(false);

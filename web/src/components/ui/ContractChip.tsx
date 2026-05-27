@@ -3,9 +3,9 @@
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 
-const cn = (...c: Array<string | false | undefined>) => c.filter(Boolean).join(" ");
+import { oklinkAddressUrl, shortHex } from "@/lib/explorer";
 
-const EXPLORER = "https://www.oklink.com/xlayer/address";
+const cn = (...c: Array<string | false | undefined>) => c.filter(Boolean).join(" ");
 
 export function ContractChip({
   label,
@@ -26,7 +26,7 @@ export function ContractChip({
       /* no-op */
     }
   }
-  const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const short = shortHex(address);
   return (
     <div
       className={cn(
@@ -46,7 +46,7 @@ export function ContractChip({
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </button>
         <a
-          href={`${EXPLORER}/${address}`}
+          href={oklinkAddressUrl(address)}
           target="_blank"
           rel="noreferrer"
           className="text-neutral-500 transition-colors hover:text-neutral-0"

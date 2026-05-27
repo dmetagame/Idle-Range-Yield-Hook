@@ -90,7 +90,11 @@ unchanged for any ERC-20 pair on any V4 pool that wants the dual-yield property.
   `0x32904e198828cf60f761ffcafc24a56d31c6a93a542c307dab4d7f2919e0f5ae`. Deposits land in
   vault shares and mock yield raises `convertToAssets(vaultShares)`.
 - **Aave-ready integration:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave V3
-  reserve behind the same ERC-4626 surface used by the hook.
+  reserve behind the same ERC-4626 surface used by the hook, with an env-driven deployment
+  script for official market addresses.
+- **OKX / OKLink integrations:** the dApp now links the hook, pool IDs, and local tx
+  receipts to OKLink, and exposes OKX Wallet / OKX DEX entry points plus a chain-196 DEX
+  Swap API URL scaffold.
 
 ### Source code
 https://github.com/dmetagame/Idle-Range-Yield-Hook

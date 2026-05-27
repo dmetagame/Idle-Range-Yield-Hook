@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 
 import { Hero } from "@/components/dashboard/Hero";
+import {
+  IntegrationsPanel,
+  type TransactionReceipt,
+} from "@/components/dashboard/IntegrationsPanel";
 import { LiveState } from "@/components/dashboard/LiveState";
 import { PoolDetails } from "@/components/dashboard/PoolDetails";
 import type { ReservePoint } from "@/components/dashboard/ReserveChart";
@@ -39,6 +43,31 @@ const POOL_CONFIGS = {
   parked: parkedDemoPoolConfig,
 } as const;
 
+type SeriesAction = {
+  poolId: string;
+  reserve0: number;
+  reserve1: number;
+  t: number;
+};
+
+function seriesReducer(
+  prev: Record<string, ReservePoint[]>,
+  action: SeriesAction,
+) {
+  const arr = prev[action.poolId] ?? [];
+  const last = arr[arr.length - 1];
+  if (last && last.reserve0 === action.reserve0 && last.reserve1 === action.reserve1) {
+    return prev;
+  }
+  const next: ReservePoint = {
+    t: action.t,
+    reserve0: action.reserve0,
+    reserve1: action.reserve1,
+    total: action.reserve0 + action.reserve1,
+  };
+  return { ...prev, [action.poolId]: [...arr, next].slice(-300) };
+}
+
 export default function Page() {
   return (
     <DashboardShell>
@@ -64,6 +93,7 @@ function NotDeployedNotice() {
 
 function Dashboard() {
   const [poolMode, setPoolMode] = useState<"active" | "parked">("active");
+  const [receipts, setReceipts] = useState<TransactionReceipt[]>([]);
   const selectedConfig = POOL_CONFIGS[poolMode];
   const poolKey = useMemo(() => getPoolKey(selectedConfig), [selectedConfig]);
   const poolId = useMemo(() => getPoolId(poolKey), [poolKey]);
@@ -136,19 +166,17 @@ function Dashboard() {
   });
   const currentTick: number | undefined = slot0 ? Number(slot0[1]) : undefined;
 
-  const [seriesByPool, setSeriesByPool] = useState<Record<string, ReservePoint[]>>({});
+  const [seriesByPool, addSeriesPoint] = useReducer(seriesReducer, {});
   useEffect(() => {
     if (!reads) return;
     const r0 = Number(formatUnits(reserve0, 18));
     const r1 = Number(formatUnits(reserve1, 18));
     if (!Number.isFinite(r0) || !Number.isFinite(r1)) return;
-    setSeriesByPool((prev) => {
-      const arr = prev[poolId] ?? [];
-      const last = arr[arr.length - 1];
-      if (last && last.reserve0 === r0 && last.reserve1 === r1) return prev;
-      const t = Math.floor(Date.now() / 1000);
-      const next: ReservePoint = { t, reserve0: r0, reserve1: r1, total: r0 + r1 };
-      return { ...prev, [poolId]: [...arr, next].slice(-300) };
+    addSeriesPoint({
+      poolId,
+      reserve0: r0,
+      reserve1: r1,
+      t: Math.floor(Date.now() / 1000),
     });
   }, [reads, poolId, reserve0, reserve1]);
 
@@ -159,6 +187,15 @@ function Dashboard() {
   function refetchAll() {
     void refetchPool();
     void refetchReads();
+  }
+
+  function onReceipt(receipt: Omit<TransactionReceipt, "at">) {
+    setReceipts((prev) =>
+      [
+        { ...receipt, at: Date.now() },
+        ...prev.filter((item) => item.hash !== receipt.hash),
+      ].slice(0, 8),
+    );
   }
 
   const yieldEnabled =
@@ -188,6 +225,13 @@ function Dashboard() {
         status={status}
         yieldEnabled={yieldEnabled}
         onSuccess={refetchAll}
+        onReceipt={onReceipt}
+      />
+      <IntegrationsPanel
+        poolMode={poolMode}
+        poolId={poolId}
+        account={address}
+        receipts={receipts}
       />
       <PoolDetails
         poolMode={poolMode}
