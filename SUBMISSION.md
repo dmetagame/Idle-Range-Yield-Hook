@@ -92,9 +92,9 @@ unchanged for any ERC-20 pair on any V4 pool that wants the dual-yield property.
 - **Aave-ready integration:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave V3
   reserve behind the same ERC-4626 surface used by the hook, with an env-driven deployment
   script for official market addresses.
-- **OKX / OKLink integrations:** the dApp now links the hook, pool IDs, and local tx
-  receipts to OKLink, and exposes OKX Wallet / OKX DEX entry points plus a chain-196 DEX
-  Swap API URL scaffold.
+- **OKX / OKLink integrations:** the dApp now links the hook, pool IDs, known proof txs,
+  local tx receipts, and latest hook events to OKLink, and exposes OKX Wallet / OKX DEX
+  entry points plus a chain-196 DEX Swap API URL scaffold.
 
 ### Source code
 https://github.com/dmetagame/Idle-Range-Yield-Hook

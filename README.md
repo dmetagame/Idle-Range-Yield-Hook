@@ -121,8 +121,9 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
 
 ## Integrations added
 
-- **OKLink verification:** the dApp links the hook, pool IDs, and local transaction receipts
-  straight to OKLink so judges can follow every action on X Layer.
+- **OKLink verification:** the dApp links the hook, pool IDs, known proof transactions,
+  local transaction receipts, and a latest-100-block hook event scan straight to OKLink so
+  judges can follow actions on X Layer.
 - **OKX Wallet / DEX:** the dApp now includes the official OKX Wallet entry point, OKX DEX
   swap page, and an OKX DEX Swap API URL scaffold for chain `196`.
 - **Aave V3 path:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave reserve as

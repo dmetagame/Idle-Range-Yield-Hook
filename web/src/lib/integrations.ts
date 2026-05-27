@@ -15,6 +15,24 @@ export const integrationLinks = {
     "https://github.com/dmetagame/Idle-Range-Yield-Hook/blob/main/script/07_DeployAaveAdapters.s.sol",
 } as const;
 
+export const proofTransactions = [
+  {
+    label: "Fee pool initialized",
+    detail: "PoolManager initialization for the live V4 pool",
+    hash: "0xdbc0b1e23eefc2f0cd15e2299830f30cdb4f55feb85fcca875b98ef7243e977e",
+  },
+  {
+    label: "Fee pool registered",
+    detail: "PoolRegistered emitted by IdleYieldHook",
+    hash: "0x7014694962dbaaa412e230fd9ae52009578626bbd7585d5a4b0b474d19000ded",
+  },
+  {
+    label: "V4 router deployed",
+    detail: "Router used by the dApp swap action",
+    hash: "0xb48d57a3c4e96ebeb90b7ffe25f133971605c2cb8d2e81f76343611a7deb6ee4",
+  },
+] as const;
+
 export const OKX_DEX_CHAIN_INDEX = "196";
 export const OKX_DEX_SWAP_API_URL =
   "https://web3.okx.com/api/v6/dex/aggregator/swap";

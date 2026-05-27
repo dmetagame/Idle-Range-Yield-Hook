@@ -4,6 +4,85 @@
 
 export const idleYieldHookAbi = [
   {
+    type: "event",
+    name: "PoolRegistered",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "lowerTick", type: "int24", indexed: false },
+      { name: "upperTick", type: "int24", indexed: false },
+      { name: "vault0", type: "address", indexed: false },
+      { name: "vault1", type: "address", indexed: false },
+      { name: "status", type: "uint8", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Deposited",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "user", type: "address", indexed: true },
+      { name: "amount0", type: "uint256", indexed: false },
+      { name: "amount1", type: "uint256", indexed: false },
+      { name: "shares", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Withdrawn",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "user", type: "address", indexed: true },
+      { name: "amount0", type: "uint256", indexed: false },
+      { name: "amount1", type: "uint256", indexed: false },
+      { name: "shares", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "V4LiquidityMinted",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "liquidity", type: "uint128", indexed: false },
+      { name: "used0", type: "uint256", indexed: false },
+      { name: "used1", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "V4LiquidityBurned",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "liquidity", type: "uint128", indexed: false },
+      { name: "received0", type: "uint256", indexed: false },
+      { name: "received1", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Parked",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "amount0", type: "uint256", indexed: false },
+      { name: "amount1", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "Unparked",
+    inputs: [
+      { name: "poolId", type: "bytes32", indexed: true },
+      { name: "amount0", type: "uint256", indexed: false },
+      { name: "amount1", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
     type: "function",
     stateMutability: "view",
     name: "totalReserve0",
