@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { formatUnits } from "viem";
-import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, useBlockNumber, useReadContract, useReadContracts } from "wagmi";
 
 import { Hero } from "@/components/dashboard/Hero";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/components/dashboard/IntegrationsPanel";
 import { LiveState } from "@/components/dashboard/LiveState";
 import { PoolDetails } from "@/components/dashboard/PoolDetails";
+import { ProofPanel } from "@/components/dashboard/ProofPanel";
 import type { ReservePoint } from "@/components/dashboard/ReserveChart";
 import { StateStrip } from "@/components/dashboard/StateStrip";
 import { Steps } from "@/components/dashboard/Steps";
@@ -98,6 +99,17 @@ function Dashboard() {
   const poolKey = useMemo(() => getPoolKey(selectedConfig), [selectedConfig]);
   const poolId = useMemo(() => getPoolId(poolKey), [poolKey]);
   const { address } = useAccount();
+
+  const { data: latestBlock } = useBlockNumber({
+    query: { refetchInterval: 8000 },
+  });
+
+  const { data: owner } = useReadContract({
+    address: addresses.idleYieldHook,
+    abi: idleYieldHookAbi,
+    functionName: "owner",
+    query: { refetchInterval: 60_000 },
+  });
 
   const { data: pool, refetch: refetchPool } = useReadContract({
     address: addresses.idleYieldHook,
@@ -226,6 +238,20 @@ function Dashboard() {
         yieldEnabled={yieldEnabled}
         onSuccess={refetchAll}
         onReceipt={onReceipt}
+      />
+      <ProofPanel
+        poolMode={poolMode}
+        poolId={poolId}
+        status={status}
+        owner={owner}
+        latestBlock={latestBlock}
+        reserve0={reserve0}
+        reserve1={reserve1}
+        currentTick={currentTick}
+        lowerTick={selectedConfig.lowerTick}
+        upperTick={selectedConfig.upperTick}
+        liquidityInPool={liquidityInPool}
+        totalShares={totalShares}
       />
       <IntegrationsPanel
         poolMode={poolMode}

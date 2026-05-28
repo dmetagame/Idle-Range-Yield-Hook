@@ -12,7 +12,9 @@ Built for the **X Layer Build X Hackathon 2026** (Uniswap V4 Hook track).
 - **IdleYieldHook:** [`0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0`](https://www.oklink.com/xlayer/address/0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0)
 - **Source:** this repo
 
-Audit hardening note: the deployed hook above includes the post-audit fixes in this source tree.
+Audit hardening note: the deployed hook above includes the post-audit fixes from commit
+`24c1a36`. The latest source also includes v2 absorber-liquidity work that should be deployed
+only from a fresh owner wallet.
 
 ## What the hook does
 
@@ -24,13 +26,15 @@ relative to the registered target range:
 | `ACTIVE_IN_RANGE` | V4 concentrated LP position owned by the hook | swap fees |
 | `PARKED_OUT_OF_RANGE` | ERC-4626 yield vault (one per token) | lending yield |
 
-Transitions are atomic and happen inside the hook's callbacks:
+Transitions happen through hook callbacks plus a permissionless settlement-safe rebalance:
 
-- `afterSwap`: if a swap moved tick *outside* the range while `ACTIVE`, the hook burns the V4
-  position and deposits the underlying into the vaults — same transaction.
 - `beforeSwap`: if the pool is `PARKED` and the incoming swap direction points *toward* the
   range, the hook redeems from vaults and mints fresh V4 liquidity *before* the swap touches
   the pool, so the swap finds liquidity to consume.
+- `rebalance`: after a boundary-crossing swap settles, anyone can park an out-of-range active
+  position into the ERC-4626 vaults. The source now allows passive absorber liquidity only
+  outside the managed range, so one-pool crossing can be tested without letting outside LPs
+  overlap depositor accounting.
 
 ERC-6909 share accounting tracks each user's claim on a `(token0Reserve + vaultShares +
 LP-implied amounts)` total, so yield accrued while parked automatically raises the share
@@ -44,7 +48,7 @@ price for existing depositors.
                         └────────────┬─────────────┘
                                      │ unlock + modifyLiquidity
                                      ▼
-   user ── deposit ───►  IdleYieldHook  ◄── afterSwap / beforeSwap callbacks
+   user ── deposit ───►  IdleYieldHook  ◄── beforeSwap callbacks + rebalance
                           │      │
                   vault0 ◄┘      └► vault1   (ERC-4626 wrapping each side)
 ```
@@ -89,7 +93,7 @@ or by anyone after the owner pre-approves the exact pool/vault config.
 
 ```bash
 forge install
-forge test         # 25 tests cover registration controls, share math, V4 LP mint/burn, and yield
+forge test         # 28 tests cover registration controls, share math, absorber LPs, and yield
 
 # Deploy to mainnet:
 forge script script/04_DeployToXLayerMainnet.s.sol \
@@ -114,8 +118,9 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
   crossing swap because the hook owns the only LP in that pool. The dApp now adds a second
   out-of-range pool that uses the same deployed hook and vaults, so the parked deposit,
   vault-share accounting, and yield-accrual path are live on-chain instead of unit-test
-  only. A v2 production design should add absorber liquidity around the managed range so a
-  single pool can cross and park naturally.
+  only. The source now includes the v2 absorber-liquidity control and tests, but that path
+  needs a fresh mainnet deployment with passive LP bands before it should replace the live
+  hackathon hook.
 - Tokens are `MockERC20`s with a public mint. They're stand-ins for a real pair
   (WETH/USDC) — the mechanism is identical and judges can interact freely without bridging.
 - `MockYieldVault.accrueYield(amount)` simulates lending yield by pulling token from the
@@ -131,8 +136,16 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
 - **OKLink verification:** the dApp links the hook, pool IDs, known proof transactions,
   local transaction receipts, and a latest-100-block hook event scan straight to OKLink so
   judges can follow actions on X Layer.
-- **OKX Wallet / DEX:** the dApp now includes the official OKX Wallet entry point, OKX DEX
-  swap page, and an OKX DEX Swap API URL scaffold for chain `196`.
+- **OKX Wallet / DEX:** the dApp includes the official OKX Wallet entry point, OKX DEX
+  swap page, a signed server route for the OKX DEX Swap API on chain `196`, and a copyable
+  raw request URL. Configure these Vercel env vars to enable live server-side OKX routing:
+
+```bash
+OKX_API_KEY=<developer-portal-api-key>
+OKX_SECRET_KEY=<developer-portal-secret>
+OKX_API_PASSPHRASE=<developer-portal-passphrase>
+OKX_PROJECT_ID=<optional-project-id>
+```
 - **Aave V3 path:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave reserve as
   ERC-4626, verifies the aToken's underlying asset and pool binding, and
   `script/07_DeployAaveAdapters.s.sol` deploys two adapters from verified env-provided market

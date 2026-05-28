@@ -85,6 +85,13 @@ export const idleYieldHookAbi = [
   {
     type: "function",
     stateMutability: "view",
+    name: "owner",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
     name: "totalReserve0",
     inputs: [{ name: "poolId", type: "bytes32" }],
     outputs: [{ type: "uint256" }],

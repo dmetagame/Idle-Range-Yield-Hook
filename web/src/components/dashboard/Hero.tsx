@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ShieldCheck } from "lucide-react";
 
 import { ButtonLink } from "@/components/ui/Button";
 import { addresses } from "@/lib/contracts";
@@ -8,6 +9,10 @@ import { addresses } from "@/lib/contracts";
 export function Hero() {
   return (
     <section className="mx-auto max-w-3xl px-6 pt-20 pb-8 md:pt-32 md:pb-12">
+      <div className="mb-6 inline-flex items-center gap-2 rounded-xl border border-accent/35 px-3 py-2 text-[13px] text-accent">
+        <ShieldCheck className="size-4" strokeWidth={1.5} />
+        Hardened X Layer mainnet deployment
+      </div>
       <h1 className="text-balance text-[40px] font-semibold leading-[1.05] tracking-tight text-neutral-0 md:text-[56px]">
         Concentrated LP capital that never sleeps.
       </h1>

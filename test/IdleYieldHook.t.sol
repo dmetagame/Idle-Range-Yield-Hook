@@ -20,6 +20,7 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {IdleYieldHook} from "../src/IdleYieldHook.sol";
 import {MockYieldVault} from "../src/mocks/MockYieldVault.sol";
 import {BaseTest} from "./utils/BaseTest.sol";
+import {EasyPosm} from "./utils/libraries/EasyPosm.sol";
 
 contract IdleYieldHookTest is BaseTest {
     using PoolIdLibrary for PoolKey;
@@ -99,6 +100,24 @@ contract IdleYieldHookTest is BaseTest {
         hook.deposit(poolKey, 100 ether, 100 ether);
     }
 
+    function mintExternalPosition(int24 tickLower, int24 tickUpper, uint256 liquidity)
+        external
+        returns (uint256 tokenId)
+    {
+        (tokenId,) = EasyPosm.mint({
+            posm: positionManager,
+            poolKey: poolKey,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            liquidity: liquidity,
+            amount0Max: 10_000 ether,
+            amount1Max: 10_000 ether,
+            recipient: address(this),
+            deadline: block.timestamp + 1,
+            hookData: ""
+        });
+    }
+
     function test_registerPool_alreadyRegistered_reverts() public {
         vm.expectRevert(IdleYieldHook.PoolAlreadyRegistered.selector);
         hook.registerPool(poolKey, LOWER_TICK, UPPER_TICK, vault0, vault1);
@@ -158,6 +177,28 @@ contract IdleYieldHookTest is BaseTest {
 
     function test_registerPool_startsActive_whenTickInRange() public view {
         assertEq(uint8(_status(poolId)), uint8(IdleYieldHook.Status.ACTIVE_IN_RANGE));
+    }
+
+    function test_absorberLiquidity_overlappingManagedRange_reverts() public {
+        vm.expectRevert();
+        this.mintExternalPosition(LOWER_TICK, UPPER_TICK, 1 ether);
+    }
+
+    function test_absorberLiquidity_adjacentOutsideManagedRange_allowed() public {
+        (uint256 tokenId,) = EasyPosm.mint({
+            posm: positionManager,
+            poolKey: poolKey,
+            tickLower: UPPER_TICK,
+            tickUpper: UPPER_TICK + 600,
+            liquidity: 1 ether,
+            amount0Max: 100 ether,
+            amount1Max: 100 ether,
+            recipient: address(this),
+            deadline: block.timestamp + 1,
+            hookData: ""
+        });
+
+        assertGt(tokenId, 0);
     }
 
     function test_deposit_inRange_mintsV4Liquidity() public {
@@ -342,6 +383,34 @@ contract IdleYieldHookTest is BaseTest {
         assertGt(reserve0After, reserve0Before);
         // Total value (in token1 terms) should be >= pre-swap minus a tiny dust window
         assertLt(reserve1After, reserve1Before);
+    }
+
+    function test_absorberLiquidity_allowsOnePoolToParkAfterBoundaryCrossing() public {
+        _depositInRange();
+
+        this.mintExternalPosition(UPPER_TICK, UPPER_TICK + 5_400, 100 ether);
+
+        MockERC20(Currency.unwrap(currency1)).mint(address(this), 1_000 ether);
+        MockERC20(Currency.unwrap(currency0)).approve(address(swapRouter), type(uint256).max);
+        MockERC20(Currency.unwrap(currency1)).approve(address(swapRouter), type(uint256).max);
+
+        swapRouter.swapExactTokensForTokens({
+            amountIn: 200 ether,
+            amountOutMin: 0,
+            zeroForOne: false,
+            poolKey: poolKey,
+            hookData: "",
+            receiver: address(this),
+            deadline: block.timestamp + 1
+        });
+
+        assertEq(uint8(_status(poolId)), uint8(IdleYieldHook.Status.ACTIVE_IN_RANGE));
+        hook.rebalance(poolKey);
+
+        assertEq(uint8(_status(poolId)), uint8(IdleYieldHook.Status.PARKED_OUT_OF_RANGE));
+        (,,,, uint128 hookLiquidity,,,,,,) = hook.pools(poolId);
+        assertEq(hookLiquidity, 0);
+        assertGt(vault1.totalAssets(), 0);
     }
 
     function test_deposit_afterSwap_crystallizesFeesBeforeMintingShares() public {

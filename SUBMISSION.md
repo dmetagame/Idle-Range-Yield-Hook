@@ -11,8 +11,8 @@
 ### 0:08–0:25 · The pitch (visual: dApp hero text on screen)
 **Voiceover:**
 > "Built as a Uniswap V4 hook. In-range, your tokens earn V4 swap fees as a hook-owned LP
-> position. Out-of-range, the hook atomically routes capital into an ERC-4626 vault to earn
-> lending yield. Dual yield, no keeper, no rebalancing bot."
+> position. Out-of-range, the hook routes capital into an ERC-4626 vault to earn lending
+> yield. Dual yield, permissionless rebalance, one on-chain primitive."
 
 ### 0:25–0:45 · Live on mainnet (visual: dApp status card + reserves card)
 **Action:** Switch to https://idle-yield-hook.vercel.app, connected wallet, status card
@@ -55,7 +55,7 @@ IdleYieldHook — Dual-yield Uniswap V4 LP
 
 ### One-liner
 A Uniswap V4 hook that earns V4 swap fees in-range and ERC-4626 lending yield out-of-range
-— atomic transitions, no keeper.
+— callback-driven unpark, permissionless park, no privileged keeper.
 
 ### Tag line / pitch
 Concentrated LP capital sits idle ~40% of the time. IdleYieldHook fixes that by routing
@@ -64,10 +64,11 @@ the moment a swap pushes price back into the active range.
 
 ### Innovation (new mechanism, not a port)
 The hook owns the V4 LP position itself and uses `beforeSwap` to atomically *unpark* (vault
-→ V4 LP) when an incoming swap would push price into the range, and `afterSwap` to *park*
-(V4 LP → vault) when price exits. This isn't possible to express on Uniswap V3 — the LP and
-the rebalance logic have to be in two separate contracts there (see Arrakis, Gamma). V4
-hooks let it be one atomic on-chain primitive.
+→ V4 LP) when an incoming swap would push price into the range. The v2 source adds passive
+absorber-liquidity bands outside the managed range; after a boundary-crossing swap settles,
+anyone can call `rebalance()` to park the inactive managed position into vaults. This is not
+possible to express cleanly on Uniswap V3 — the LP and rebalance logic have to be in separate
+contracts there (see Arrakis, Gamma). V4 hooks let it be one on-chain primitive.
 
 ### Market potential
 Every concentrated LP holder on every V4 chain benefits — out-of-range capital becomes
@@ -81,8 +82,9 @@ unchanged for any ERC-20 pair on any V4 pool that wants the dual-yield property.
 - **Live dApp:** https://idle-yield-hook.vercel.app — Wagmi/RainbowKit, connects to chain
   196, with Fee pool and Vault demo modes, mock-token minting, deposit, swap, and vault-yield
   actions.
-- **Tests:** 25 Foundry tests pass covering registration controls, fee crystallization before
-  deposits, ERC-6909 share math, V4 LP mint/burn via unlock callback, and vault yield accrual.
+- **Tests:** 28 Foundry tests pass covering registration controls, fee crystallization before
+  deposits, absorber LP bands, ERC-6909 share math, V4 LP mint/burn via unlock callback, and
+  vault yield accrual.
 - **On-chain proof:** the seeded run deposited `2 + 2`, then executed 9 real swaps across the
   registered range, ending around `2.0496 Token0` and `1.9504 Token1` reserves. Hardened active PoolId
   `0x98f63bcbedff50af73958cecf72f00c1d8a17ae112625f5d92fb154d5f75235c`.
@@ -95,7 +97,7 @@ unchanged for any ERC-20 pair on any V4 pool that wants the dual-yield property.
   script for official market addresses.
 - **OKX / OKLink integrations:** the dApp now links the hook, pool IDs, known proof txs,
   local tx receipts, and latest hook events to OKLink, and exposes OKX Wallet / OKX DEX
-  entry points plus a chain-196 DEX Swap API URL scaffold.
+  entry points plus a chain-196 signed DEX Swap API route.
 
 ### Source code
 https://github.com/dmetagame/Idle-Range-Yield-Hook
@@ -107,8 +109,8 @@ https://idle-yield-hook.vercel.app
 The active fee pool cannot naturally cross into PARKED by swap because the hook owns the only LP
 in that pool. To make the parked/yield path live for judging, the dApp includes a second
 out-of-range V4 pool registered to the same hardened hook and vaults. A v2 production design
-should add absorber liquidity around the managed range so one pool can cross, park, and unpark
-naturally.
+should deploy the new absorber-liquidity source path with passive LP bands around the managed
+range so one pool can cross, park through `rebalance()`, and unpark naturally.
 
 ---
 
@@ -120,7 +122,7 @@ Built IdleYieldHook for the @XLayerOfficial Build X Hackathon. 🦄
 A @Uniswap V4 hook that earns:
 • swap fees in-range
 • ERC-4626 lending yield out-of-range
-atomically. No keepers. One on-chain primitive.
+with callback-driven unpark + permissionless park.
 
 Live on X Layer mainnet: idle-yield-hook.vercel.app
 Source: github.com/dmetagame/Idle-Range-Yield-Hook

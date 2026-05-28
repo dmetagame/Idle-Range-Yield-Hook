@@ -86,3 +86,28 @@ export function buildOkxDexSwapApiUrl({
   });
   return `${OKX_DEX_SWAP_API_URL}?${params.toString()}`;
 }
+
+export function buildOkxDexProxySwapUrl({
+  user,
+  fromTokenAddress = addresses.token0,
+  toTokenAddress = addresses.token1,
+  amount = "1000000000000000000",
+  slippagePercent = "0.5",
+}: {
+  user: Address;
+  fromTokenAddress?: Address;
+  toTokenAddress?: Address;
+  amount?: string;
+  slippagePercent?: string;
+}) {
+  const params = new URLSearchParams({
+    chainIndex: OKX_DEX_CHAIN_INDEX,
+    amount,
+    swapMode: "exactIn",
+    fromTokenAddress,
+    toTokenAddress,
+    slippagePercent,
+    userWalletAddress: user,
+  });
+  return `/api/okx/swap?${params.toString()}`;
+}

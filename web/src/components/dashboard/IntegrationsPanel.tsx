@@ -19,6 +19,7 @@ import { idleYieldHookAbi } from "@/lib/abi";
 import { addresses } from "@/lib/contracts";
 import { oklinkAddressUrl, oklinkTxUrl, shortHex } from "@/lib/explorer";
 import {
+  buildOkxDexProxySwapUrl,
   buildOkxDexSwapApiUrl,
   integrationLinks,
   OKX_DEX_CHAIN_INDEX,
@@ -78,8 +79,14 @@ export function IntegrationsPanel({
   const [eventError, setEventError] = useState<string | undefined>();
   const [switchingChain, setSwitchingChain] = useState(false);
   const [walletMessage, setWalletMessage] = useState<string | undefined>();
+  const [checkingOkxRoute, setCheckingOkxRoute] = useState(false);
+  const [okxRouteMessage, setOkxRouteMessage] = useState<string | undefined>();
   const okxApiUrl = useMemo(
     () => (account ? buildOkxDexSwapApiUrl({ user: account }) : undefined),
+    [account],
+  );
+  const okxProxyUrl = useMemo(
+    () => (account ? buildOkxDexProxySwapUrl({ user: account }) : undefined),
     [account],
   );
 
@@ -143,6 +150,29 @@ export function IntegrationsPanel({
     }
   }
 
+  async function onCheckOkxRoute() {
+    if (!okxProxyUrl) return;
+    setCheckingOkxRoute(true);
+    setOkxRouteMessage(undefined);
+    try {
+      const response = await fetch(okxProxyUrl);
+      const body = await response.json();
+      if (response.ok) {
+        setOkxRouteMessage("Signed route returned by OKX DEX.");
+      } else if (body?.configured === false) {
+        setOkxRouteMessage("Server route is ready. Add OKX API env keys to enable live quotes.");
+      } else {
+        const upstreamMessage =
+          body?.data?.msg ?? body?.data?.message ?? body?.error ?? "OKX route unavailable.";
+        setOkxRouteMessage(String(upstreamMessage));
+      }
+    } catch (error) {
+      setOkxRouteMessage(error instanceof Error ? error.message : "OKX route check failed.");
+    } finally {
+      setCheckingOkxRoute(false);
+    }
+  }
+
   return (
     <section className="mx-auto max-w-3xl px-6 pt-20 md:pt-32">
       <div className="font-mono text-[12px] uppercase tracking-wide text-neutral-500">
@@ -201,7 +231,10 @@ export function IntegrationsPanel({
         <IntegrationBlock
           icon={<Route className="size-4" strokeWidth={1.5} />}
           title="OKX DEX"
-          body={`Swap API scaffold set for chainIndex ${OKX_DEX_CHAIN_INDEX}.`}
+          body={
+            okxRouteMessage ??
+            `Server-signed V6 route wired for chainIndex ${OKX_DEX_CHAIN_INDEX}.`
+          }
         >
           <ButtonLink
             href={integrationLinks.okxDexApiDocs}
@@ -211,6 +244,14 @@ export function IntegrationsPanel({
           >
             API <ExternalLink className="size-3.5" />
           </ButtonLink>
+          <Button
+            tier="secondary"
+            onClick={onCheckOkxRoute}
+            disabled={!account || checkingOkxRoute}
+            className="gap-2 px-3 py-2 text-[13px]"
+          >
+            {checkingOkxRoute ? "Checking" : "Route"}
+          </Button>
           {okxApiUrl ? <CopyButton value={okxApiUrl} label="Quote URL" /> : null}
         </IntegrationBlock>
       </div>

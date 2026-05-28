@@ -79,6 +79,7 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
     event Withdrawn(PoolId indexed poolId, address indexed user, uint256 amount0, uint256 amount1, uint256 shares);
     event V4LiquidityMinted(PoolId indexed poolId, uint128 liquidity, uint256 used0, uint256 used1);
     event V4LiquidityBurned(PoolId indexed poolId, uint128 liquidity, uint256 received0, uint256 received1);
+    event AbsorberLiquidityAllowed(PoolId indexed poolId, address indexed provider, int24 tickLower, int24 tickUpper);
     event Parked(PoolId indexed poolId, uint256 amount0, uint256 amount1);
     event Unparked(PoolId indexed poolId, uint256 amount0, uint256 amount1);
 
@@ -89,6 +90,7 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
     error InvalidHook();
     error NotOwner();
     error PoolRegistrationNotApproved();
+    error ExternalLiquidityOverlapsManagedRange();
     error Reentrancy();
     error ZeroDeposit();
     error InsufficientShares();
@@ -138,22 +140,28 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         });
     }
 
-    function _afterInitialize(address, PoolKey calldata, uint160, int24)
-        internal
-        pure
-        override
-        returns (bytes4)
-    {
+    function _afterInitialize(address, PoolKey calldata, uint160, int24) internal pure override returns (bytes4) {
         return BaseHook.afterInitialize.selector;
     }
 
-    function _beforeAddLiquidity(address sender, PoolKey calldata, ModifyLiquidityParams calldata, bytes calldata)
-        internal
-        view
-        override
-        returns (bytes4)
-    {
-        require(sender == address(this), "IdleYieldHook: direct LP adds disallowed; use deposit()");
+    function _beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        bytes calldata
+    ) internal override returns (bytes4) {
+        if (sender == address(this)) {
+            return BaseHook.beforeAddLiquidity.selector;
+        }
+
+        PoolId poolId = key.toId();
+        ManagedPool storage p = pools[poolId];
+        if (p.status == Status.UNSET) revert PoolNotRegistered();
+        if (params.tickLower < p.upperTick && params.tickUpper > p.lowerTick) {
+            revert ExternalLiquidityOverlapsManagedRange();
+        }
+
+        emit AbsorberLiquidityAllowed(poolId, sender, params.tickLower, params.tickUpper);
         return BaseHook.beforeAddLiquidity.selector;
     }
 
@@ -167,7 +175,7 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         if (p.status == Status.PARKED_OUT_OF_RANGE) {
             (, int24 currentTick,,) = poolManager.getSlot0(poolId);
             bool willApproachRange = params.zeroForOne
-                ? p.upperTick <= currentTick // price decreasing into a range that sits at/below current tick
+                ? p.upperTick <= currentTick  // price decreasing into a range that sits at/below current tick
                 : p.lowerTick > currentTick; // price increasing into a range that sits above current tick
             if (willApproachRange) {
                 _unparkInUnlock(poolId, p, key);
@@ -181,17 +189,14 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         override
         returns (bytes4, int128)
     {
-        _rebalanceInUnlock(key);
+        _unparkIfBackInRangeInUnlock(key);
         return (BaseHook.afterSwap.selector, 0);
     }
 
-    function registerPool(
-        PoolKey calldata key,
-        int24 lowerTick,
-        int24 upperTick,
-        ERC4626 vault0,
-        ERC4626 vault1
-    ) external nonReentrant {
+    function registerPool(PoolKey calldata key, int24 lowerTick, int24 upperTick, ERC4626 vault0, ERC4626 vault1)
+        external
+        nonReentrant
+    {
         _validatePoolShape(key, lowerTick, upperTick);
 
         bytes32 configHash = poolConfigHash(key, lowerTick, upperTick, vault0, vault1);
@@ -218,13 +223,11 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         emit PoolRegistered(poolId, lowerTick, upperTick, address(vault0), address(vault1), p.status);
     }
 
-    function approvePoolConfig(
-        PoolKey calldata key,
-        int24 lowerTick,
-        int24 upperTick,
-        ERC4626 vault0,
-        ERC4626 vault1
-    ) external onlyOwner returns (bytes32 configHash) {
+    function approvePoolConfig(PoolKey calldata key, int24 lowerTick, int24 upperTick, ERC4626 vault0, ERC4626 vault1)
+        external
+        onlyOwner
+        returns (bytes32 configHash)
+    {
         _validatePoolShape(key, lowerTick, upperTick);
         if (address(vault0.asset()) != Currency.unwrap(key.currency0)) revert InvalidVault();
         if (address(vault1.asset()) != Currency.unwrap(key.currency1)) revert InvalidVault();
@@ -240,13 +243,11 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         emit PoolConfigApprovalRevoked(configHash);
     }
 
-    function poolConfigHash(
-        PoolKey calldata key,
-        int24 lowerTick,
-        int24 upperTick,
-        ERC4626 vault0,
-        ERC4626 vault1
-    ) public pure returns (bytes32) {
+    function poolConfigHash(PoolKey calldata key, int24 lowerTick, int24 upperTick, ERC4626 vault0, ERC4626 vault1)
+        public
+        pure
+        returns (bytes32)
+    {
         return keccak256(
             abi.encode(
                 Currency.unwrap(key.currency0),
@@ -409,11 +410,7 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
                       INTERNAL — RESERVE / RANGE
     //////////////////////////////////////////////////////////////*/
 
-    function _totalReserveSide(PoolId poolId, ManagedPool storage p, bool isToken0)
-        internal
-        view
-        returns (uint256)
-    {
+    function _totalReserveSide(PoolId poolId, ManagedPool storage p, bool isToken0) internal view returns (uint256) {
         uint256 fromVault;
         uint256 inHook;
         if (isToken0) {
@@ -586,6 +583,20 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         if (!inRange && p.status == Status.ACTIVE_IN_RANGE) {
             _parkInUnlock(poolId, p, key);
         } else if (inRange && p.status == Status.PARKED_OUT_OF_RANGE) {
+            _unparkInUnlock(poolId, p, key);
+        }
+    }
+
+    /// @dev afterSwap runs before the router settles exact-input tokens into PoolManager.
+    ///      Parking during that hook can require taking assets PoolManager has not received yet,
+    ///      so active-to-parked transitions are handled by the public rebalance() call.
+    function _unparkIfBackInRangeInUnlock(PoolKey calldata key) internal {
+        PoolId poolId = key.toId();
+        ManagedPool storage p = pools[poolId];
+        if (p.status != Status.PARKED_OUT_OF_RANGE) return;
+
+        (, int24 currentTick,,) = poolManager.getSlot0(poolId);
+        if (_isInRange(currentTick, p.lowerTick, p.upperTick)) {
             _unparkInUnlock(poolId, p, key);
         }
     }
