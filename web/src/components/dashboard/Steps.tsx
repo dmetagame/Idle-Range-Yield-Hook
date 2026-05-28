@@ -367,20 +367,15 @@ function SwapStep({
       caption="Routes through the hook's LP — the 0.30% fee compounds into reserves."
       isLast
     >
-      <AmountInput
-        value={amount}
-        onChange={setAmount}
-        suffix={
-          <button
-            type="button"
-            onClick={() => setZeroForOne((v) => !v)}
-            className="font-mono text-[12px] text-neutral-300 transition-colors hover:text-neutral-0"
-          >
-            {zeroForOne ? "Token0 → Token1" : "Token1 → Token0"}
-          </button>
-        }
-        width="6rem"
-      />
+      <AmountInput value={amount} onChange={setAmount} width="6rem" />
+      <button
+        type="button"
+        onClick={() => setZeroForOne((v) => !v)}
+        className="h-10 shrink-0 rounded-xl border border-neutral-700 bg-neutral-900 px-3 font-mono text-[12px] text-neutral-200 transition-colors hover:border-neutral-50/40 hover:text-neutral-0"
+        aria-label="Swap direction"
+      >
+        {zeroForOne ? "Token0 → Token1" : "Token1 → Token0"}
+      </button>
       <select
         value={slippageBps}
         onChange={(e) => setSlippageBps(Number(e.target.value))}
@@ -567,7 +562,7 @@ function AmountInput({
 }: {
   value: string;
   onChange: (v: string) => void;
-  suffix: ReactNode;
+  suffix?: ReactNode;
   width?: string;
 }) {
   return (
@@ -584,7 +579,9 @@ function AmountInput({
         placeholder="0"
         min="0"
       />
-      <span className="shrink-0 text-[12px] text-neutral-500">{suffix}</span>
+      {suffix ? (
+        <span className="shrink-0 text-[12px] text-neutral-500">{suffix}</span>
+      ) : null}
     </div>
   );
 }
