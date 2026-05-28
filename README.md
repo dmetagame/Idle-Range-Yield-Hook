@@ -7,14 +7,17 @@
 
 Built for the **X Layer Build X Hackathon 2026** (Uniswap V4 Hook track).
 
+> **What's deployed vs. what's in source.** The on-chain hook is the build from commit
+> [`24c1a36`](../../commit/24c1a36) ("Harden hook and redeploy X Layer demo"). The `main`
+> branch carries additional v2 absorber-liquidity work that is **not yet on-chain** and
+> would need a redeploy to take effect. If you are a judge running the live dApp, you are
+> interacting with the deployed `24c1a36` build.
+
 - **dApp:** https://idle-yield-hook.vercel.app
 - **Chain:** X Layer mainnet (chain 196)
 - **IdleYieldHook:** [`0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0`](https://www.oklink.com/xlayer/address/0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0)
+- **Hook owner:** [`0x8fA593e50f4bb15efAaBd1AD8110d5151D116f8B`](https://www.oklink.com/xlayer/address/0x8fA593e50f4bb15efAaBd1AD8110d5151D116f8B) (rotated post-deploy; the original deployer key is retired)
 - **Source:** this repo
-
-Audit hardening note: the deployed hook above includes the post-audit fixes from commit
-`24c1a36`. The latest source also includes v2 absorber-liquidity work that should be deployed
-only from a fresh owner wallet.
 
 ## What the hook does
 
