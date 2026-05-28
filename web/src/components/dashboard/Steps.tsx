@@ -3,7 +3,13 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { parseUnits, type Hex } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useChainId,
+  usePublicClient,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 
 import { Button } from "@/components/ui/Button";
 import {
@@ -13,10 +19,31 @@ import {
   poolManagerAbi,
   v4RouterAbi,
 } from "@/lib/abi";
+import { xLayer } from "@/lib/chains";
 import { addresses, parkedDemoPoolConfig } from "@/lib/contracts";
 import type { PoolKey } from "@/lib/pool-id";
 
 type Status = "UNSET" | "ACTIVE_IN_RANGE" | "PARKED_OUT_OF_RANGE";
+
+function useChainGuard() {
+  const chainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
+  const onCorrectChain = chainId === xLayer.id;
+  async function ensureCorrectChain() {
+    if (onCorrectChain) return;
+    await switchChainAsync({ chainId: xLayer.id });
+  }
+  return { onCorrectChain, ensureCorrectChain };
+}
+
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    const short = (err as { shortMessage?: string }).shortMessage;
+    if (typeof short === "string" && short.length > 0) return short;
+    return err.message.split("\n")[0];
+  }
+  return String(err);
+}
 
 export function Steps({
   poolMode,
@@ -123,15 +150,19 @@ function MintStep({
   onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
+  const { onCorrectChain, ensureCorrectChain } = useChainGuard();
   const [amount, setAmount] = useState("25");
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
 
   async function onMint() {
     if (!address) return;
+    setErrorMsg(null);
     setSubmitting(true);
     try {
+      await ensureCorrectChain();
       const amt = parseUnits(amount || "0", 18);
       const h0 = await writeContractAsync({
         address: addresses.token0,
@@ -149,6 +180,8 @@ function MintStep({
       });
       await publicClient?.waitForTransactionReceipt({ hash: h1 });
       onReceipt({ label: "Mint Token1", hash: h1 });
+    } catch (err) {
+      setErrorMsg(extractErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -166,8 +199,17 @@ function MintStep({
         disabled={!address || submitting || !amount || Number(amount) <= 0}
         onClick={onMint}
       >
-        {!address ? "Connect" : submitting ? "Minting…" : "Mint"}
+        {!address
+          ? "Connect"
+          : !onCorrectChain
+            ? "Switch network"
+            : submitting
+              ? "Minting…"
+              : "Mint"}
       </Button>
+      {errorMsg ? (
+        <p className="basis-full text-[12px] text-negative">{errorMsg}</p>
+      ) : null}
     </StepRow>
   );
 }
@@ -186,15 +228,19 @@ function DepositStep({
   onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
+  const { onCorrectChain, ensureCorrectChain } = useChainGuard();
   const [amount, setAmount] = useState("10");
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
 
   async function onDeposit() {
     if (!address) return;
+    setErrorMsg(null);
     setSubmitting(true);
     try {
+      await ensureCorrectChain();
       const amt = parseUnits(amount || "0", 18);
       const a0 = await writeContractAsync({
         address: addresses.token0,
@@ -219,6 +265,8 @@ function DepositStep({
       await publicClient?.waitForTransactionReceipt({ hash: d });
       onReceipt({ label: "Deposit", hash: d });
       onSuccess();
+    } catch (err) {
+      setErrorMsg(extractErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -245,10 +293,15 @@ function DepositStep({
           ? "Connect"
           : status === "UNSET"
             ? "Not registered"
-            : submitting
-              ? "Submitting…"
-              : "Deposit"}
+            : !onCorrectChain
+              ? "Switch network"
+              : submitting
+                ? "Submitting…"
+                : "Deposit"}
       </Button>
+      {errorMsg ? (
+        <p className="basis-full text-[12px] text-negative">{errorMsg}</p>
+      ) : null}
     </StepRow>
   );
 }
@@ -265,17 +318,21 @@ function SwapStep({
   onReceipt: (receipt: { label: string; hash: Hex }) => void;
 }) {
   const { address } = useAccount();
+  const { onCorrectChain, ensureCorrectChain } = useChainGuard();
   const [amount, setAmount] = useState("0.5");
   const [zeroForOne, setZeroForOne] = useState(true);
   const [slippageBps, setSlippageBps] = useState(100);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
 
   async function onSwap() {
     if (!address) return;
+    setErrorMsg(null);
     setSubmitting(true);
     try {
+      await ensureCorrectChain();
       const amt = parseUnits(amount || "0", 18);
       const minOut = (amt * BigInt(10_000 - slippageBps)) / 10_000n;
       const input = zeroForOne ? addresses.token0 : addresses.token1;
@@ -296,6 +353,8 @@ function SwapStep({
       await publicClient?.waitForTransactionReceipt({ hash: s });
       onReceipt({ label: zeroForOne ? "Swap Token0 -> Token1" : "Swap Token1 -> Token0", hash: s });
       onSuccess();
+    } catch (err) {
+      setErrorMsg(extractErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -337,8 +396,17 @@ function SwapStep({
         disabled={!address || submitting || !amount || Number(amount) <= 0}
         onClick={onSwap}
       >
-        {!address ? "Connect" : submitting ? "Swapping…" : "Swap"}
+        {!address
+          ? "Connect"
+          : !onCorrectChain
+            ? "Switch network"
+            : submitting
+              ? "Swapping…"
+              : "Swap"}
       </Button>
+      {errorMsg ? (
+        <p className="basis-full text-[12px] text-negative">{errorMsg}</p>
+      ) : null}
     </StepRow>
   );
 }
