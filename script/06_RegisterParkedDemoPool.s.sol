@@ -19,11 +19,11 @@ import {XLayerConstants} from "./base/XLayerConstants.sol";
 ///         initialized above the managed range, so deposits route to the vaults
 ///         immediately and judges can verify the parked/yield path on-chain.
 contract RegisterParkedDemoPool is Script {
-    address constant TOKEN0 = 0x3517b74800E6A731656D8cc809d77f730da4d1dA;
-    address constant TOKEN1 = 0x746A932D764d37f10c2f474D170734A05a20e87a;
-    address constant IDLE_YIELD_HOOK = 0xc1c27663969645A7bfd53507324227137eE058C0;
-    address constant VAULT0 = 0x54E7f00A7401130340e81cE6d9B0D02C7C8c7E5d;
-    address constant VAULT1 = 0x09a6133261d993b58324bA3C6d14D93B12BD8CB4;
+    address constant TOKEN0 = 0x997cD0d393FCe9c3726cCDb02Cc94F9b222f4182;
+    address constant TOKEN1 = 0xF20a8F2e9F4127c6e83aAB89106d09d8C26AF6A9;
+    address constant IDLE_YIELD_HOOK = 0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0;
+    address constant VAULT0 = 0x6f8be9FfCaD5EbA84d1fe3db9875005FBA24c396;
+    address constant VAULT1 = 0x90Fee8b4D1834CbbAc5427e3D3554d189B8653f8;
 
     int24 constant LOWER_TICK = -960;
     int24 constant UPPER_TICK = 960;

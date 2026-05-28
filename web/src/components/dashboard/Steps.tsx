@@ -140,7 +140,7 @@ function MintStep({
         args: [address, amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: h0 });
-      onReceipt({ label: "Mint IY0", hash: h0 });
+      onReceipt({ label: "Mint Token0", hash: h0 });
       const h1 = await writeContractAsync({
         address: addresses.token1,
         abi: erc20Abi,
@@ -148,7 +148,7 @@ function MintStep({
         args: [address, amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: h1 });
-      onReceipt({ label: "Mint IY1", hash: h1 });
+      onReceipt({ label: "Mint Token1", hash: h1 });
     } finally {
       setSubmitting(false);
     }
@@ -158,7 +158,7 @@ function MintStep({
     <StepRow
       n={n}
       title="Mint test tokens"
-      caption="Public mint on the mock IY0 / IY1 pair so you can interact freely."
+      caption="Public mint on the mock Token0 / Token1 pair so you can interact freely."
     >
       <AmountInput value={amount} onChange={setAmount} suffix="each" width="6rem" />
       <Button
@@ -267,6 +267,7 @@ function SwapStep({
   const { address } = useAccount();
   const [amount, setAmount] = useState("0.5");
   const [zeroForOne, setZeroForOne] = useState(true);
+  const [slippageBps, setSlippageBps] = useState(100);
   const [submitting, setSubmitting] = useState(false);
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
@@ -276,6 +277,7 @@ function SwapStep({
     setSubmitting(true);
     try {
       const amt = parseUnits(amount || "0", 18);
+      const minOut = (amt * BigInt(10_000 - slippageBps)) / 10_000n;
       const input = zeroForOne ? addresses.token0 : addresses.token1;
       const a = await writeContractAsync({
         address: input,
@@ -289,10 +291,10 @@ function SwapStep({
         address: addresses.v4Router,
         abi: v4RouterAbi,
         functionName: "swapExactTokensForTokens",
-        args: [amt, 0n, zeroForOne, poolKey, "0x", address, deadline],
+        args: [amt, minOut, zeroForOne, poolKey, "0x", address, deadline],
       });
       await publicClient?.waitForTransactionReceipt({ hash: s });
-      onReceipt({ label: zeroForOne ? "Swap IY0 -> IY1" : "Swap IY1 -> IY0", hash: s });
+      onReceipt({ label: zeroForOne ? "Swap Token0 -> Token1" : "Swap Token1 -> Token0", hash: s });
       onSuccess();
     } finally {
       setSubmitting(false);
@@ -315,11 +317,21 @@ function SwapStep({
             onClick={() => setZeroForOne((v) => !v)}
             className="font-mono text-[12px] text-neutral-300 transition-colors hover:text-neutral-0"
           >
-            {zeroForOne ? "IY0 → IY1" : "IY1 → IY0"}
+            {zeroForOne ? "Token0 → Token1" : "Token1 → Token0"}
           </button>
         }
         width="6rem"
       />
+      <select
+        value={slippageBps}
+        onChange={(e) => setSlippageBps(Number(e.target.value))}
+        className="h-10 rounded-xl border border-neutral-700 bg-neutral-900 px-3 font-mono text-[12px] text-neutral-200 outline-none transition-colors focus:border-neutral-50/40"
+        aria-label="Swap slippage tolerance"
+      >
+        <option value={100}>1%</option>
+        <option value={300}>3%</option>
+        <option value={500}>5%</option>
+      </select>
       <Button
         tier="primary"
         disabled={!address || submitting || !amount || Number(amount) <= 0}
@@ -367,7 +379,7 @@ function YieldStep({
         args: [amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: ac0 });
-      onReceipt({ label: "Accrue yIY0", hash: ac0 });
+      onReceipt({ label: "Accrue Vault0", hash: ac0 });
       const a1 = await writeContractAsync({
         address: addresses.token1,
         abi: erc20Abi,
@@ -382,7 +394,7 @@ function YieldStep({
         args: [amt],
       });
       await publicClient?.waitForTransactionReceipt({ hash: ac1 });
-      onReceipt({ label: "Accrue yIY1", hash: ac1 });
+      onReceipt({ label: "Accrue Vault1", hash: ac1 });
       onSuccess();
     } finally {
       setSubmitting(false);
@@ -466,7 +478,7 @@ function InitializeStep({
     <StepRow
       n={n}
       title="Initialise the parked-pool demo"
-      caption="Creates a second V4 pool out of range and registers it with the existing hook."
+      caption="Creates a second V4 pool out of range and registers it if the exact config was pre-approved."
     >
       <Button
         tier="primary"

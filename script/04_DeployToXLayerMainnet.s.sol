@@ -6,6 +6,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -23,12 +24,17 @@ import {XLayerConstants} from "./base/XLayerConstants.sol";
 ///         Uniswap v4 core is already deployed at canonical addresses; we only
 ///         deploy the demo tokens, vaults, hook, and the pool.
 contract DeployToXLayerMainnet is Script {
+    using PoolIdLibrary for PoolKey;
+
     address constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     int24 constant TICK_SPACING = 60;
     uint24 constant SWAP_FEE = 3000;
     int24 constant LOWER_TICK = -960;
     int24 constant UPPER_TICK = 960;
+    int24 constant PARKED_TICK_SPACING = 10;
+    uint24 constant PARKED_SWAP_FEE = 500;
+    int24 constant PARKED_INITIAL_TICK = 5_000;
 
     function run() public {
         require(block.chainid == XLayerConstants.XLAYER_MAINNET, "Run against X Layer mainnet (196)");
@@ -55,20 +61,31 @@ contract DeployToXLayerMainnet is Script {
                 | Hooks.AFTER_SWAP_FLAG
         );
         bytes memory creationCode = type(IdleYieldHook).creationCode;
-        bytes memory ctorArgs = abi.encode(IPoolManager(poolManager));
+        bytes memory ctorArgs = abi.encode(IPoolManager(poolManager), sender);
         (address mined, bytes32 salt) = HookMiner.find(CREATE2_DEPLOYER, flags, creationCode, ctorArgs);
-        IdleYieldHook hook = new IdleYieldHook{salt: salt}(IPoolManager(poolManager));
+        IdleYieldHook hook = new IdleYieldHook{salt: salt}(IPoolManager(poolManager), sender);
         require(address(hook) == mined, "Mined address mismatch");
+        require(hook.owner() == sender, "Hook owner mismatch");
 
-        PoolKey memory key = PoolKey({
+        PoolKey memory activeKey = PoolKey({
             currency0: Currency.wrap(address(token0)),
             currency1: Currency.wrap(address(token1)),
             fee: SWAP_FEE,
             tickSpacing: TICK_SPACING,
             hooks: IHooks(address(hook))
         });
-        IPoolManager(poolManager).initialize(key, TickMath.getSqrtPriceAtTick(0));
-        hook.registerPool(key, LOWER_TICK, UPPER_TICK, vault0, vault1);
+        IPoolManager(poolManager).initialize(activeKey, TickMath.getSqrtPriceAtTick(0));
+        hook.registerPool(activeKey, LOWER_TICK, UPPER_TICK, vault0, vault1);
+
+        PoolKey memory parkedKey = PoolKey({
+            currency0: Currency.wrap(address(token0)),
+            currency1: Currency.wrap(address(token1)),
+            fee: PARKED_SWAP_FEE,
+            tickSpacing: PARKED_TICK_SPACING,
+            hooks: IHooks(address(hook))
+        });
+        IPoolManager(poolManager).initialize(parkedKey, TickMath.getSqrtPriceAtTick(PARKED_INITIAL_TICK));
+        hook.registerPool(parkedKey, LOWER_TICK, UPPER_TICK, vault0, vault1);
 
         vm.stopBroadcast();
 
@@ -79,6 +96,9 @@ contract DeployToXLayerMainnet is Script {
         console2.log("Vault0:           ", address(vault0));
         console2.log("Vault1:           ", address(vault1));
         console2.log("IdleYieldHook:    ", address(hook));
+        console2.log("HookOwner:        ", hook.owner());
+        console2.logBytes32(PoolId.unwrap(activeKey.toId()));
+        console2.logBytes32(PoolId.unwrap(parkedKey.toId()));
         console2.log("=========================================");
     }
 }

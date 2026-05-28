@@ -19,8 +19,8 @@ export function YourPosition({
       </div>
       <div className="mt-6 grid gap-x-12 gap-y-6 md:grid-cols-3">
         <Field label="Shares" value={userShares > 0n ? fmt(userShares, 0) : "0"} />
-        <Field label="Claim · IY0" value={fmt(claim0)} />
-        <Field label="Claim · IY1" value={fmt(claim1)} />
+        <Field label="Claim · Token0" value={fmt(claim0)} />
+        <Field label="Claim · Token1" value={fmt(claim1)} />
       </div>
     </section>
   );

@@ -40,6 +40,7 @@ contract IdleYieldHookTest is BaseTest {
 
     address alice = address(0xA11CE);
     address bob = address(0xB0B);
+    address attacker = address(0xA77A);
     address yieldFunder = address(0xF11ED);
 
     function setUp() public {
@@ -52,7 +53,7 @@ contract IdleYieldHookTest is BaseTest {
                     | Hooks.AFTER_SWAP_FLAG
             ) ^ (0x4444 << 144)
         );
-        bytes memory constructorArgs = abi.encode(poolManager);
+        bytes memory constructorArgs = abi.encode(poolManager, address(this));
         deployCodeTo("IdleYieldHook.sol:IdleYieldHook", constructorArgs, flags);
         hook = IdleYieldHook(flags);
 
@@ -111,6 +112,50 @@ contract IdleYieldHookTest is BaseTest {
         hook.registerPool(other, LOWER_TICK, UPPER_TICK, vault1, vault0); // swapped
     }
 
+    function test_registerPool_unapprovedCaller_reverts() public {
+        PoolKey memory other = PoolKey(currency0, currency1, 500, 10, IHooks(hook));
+        poolManager.initialize(other, Constants.SQRT_PRICE_1_1);
+
+        MockYieldVault v0 = new MockYieldVault(ERC20(Currency.unwrap(currency0)), "VP0", "VP0");
+        MockYieldVault v1 = new MockYieldVault(ERC20(Currency.unwrap(currency1)), "VP1", "VP1");
+
+        vm.expectRevert(IdleYieldHook.PoolRegistrationNotApproved.selector);
+        vm.prank(attacker);
+        hook.registerPool(other, LOWER_TICK, UPPER_TICK, v0, v1);
+    }
+
+    function test_registerPool_approvedConfig_canBeRegisteredByAnyone() public {
+        PoolKey memory other = PoolKey(currency0, currency1, 500, 10, IHooks(hook));
+        poolManager.initialize(other, Constants.SQRT_PRICE_1_1);
+
+        MockYieldVault v0 = new MockYieldVault(ERC20(Currency.unwrap(currency0)), "VP0", "VP0");
+        MockYieldVault v1 = new MockYieldVault(ERC20(Currency.unwrap(currency1)), "VP1", "VP1");
+
+        bytes32 configHash = hook.approvePoolConfig(other, LOWER_TICK, UPPER_TICK, v0, v1);
+        assertTrue(hook.approvedPoolConfigs(configHash));
+
+        vm.prank(attacker);
+        hook.registerPool(other, LOWER_TICK, UPPER_TICK, v0, v1);
+
+        PoolId otherId = other.toId();
+        assertEq(uint8(_status(otherId)), uint8(IdleYieldHook.Status.ACTIVE_IN_RANGE));
+        assertFalse(hook.approvedPoolConfigs(configHash));
+    }
+
+    function test_registerPool_invalidHook_reverts() public {
+        PoolKey memory other = PoolKey(currency0, currency1, 500, 10, IHooks(address(0)));
+
+        vm.expectRevert(IdleYieldHook.InvalidHook.selector);
+        hook.registerPool(other, LOWER_TICK, UPPER_TICK, vault0, vault1);
+    }
+
+    function test_registerPool_invalidTickSpacing_reverts() public {
+        PoolKey memory other = PoolKey(currency0, currency1, 500, 10, IHooks(hook));
+
+        vm.expectRevert(IdleYieldHook.InvalidTickRange.selector);
+        hook.registerPool(other, LOWER_TICK - 1, UPPER_TICK, vault0, vault1);
+    }
+
     function test_registerPool_startsActive_whenTickInRange() public view {
         assertEq(uint8(_status(poolId)), uint8(IdleYieldHook.Status.ACTIVE_IN_RANGE));
     }
@@ -140,6 +185,24 @@ contract IdleYieldHookTest is BaseTest {
         vm.prank(bob);
         uint256 bobShares = hook.deposit(poolKey, 50 ether, 50 ether);
         assertEq(bobShares, 50 ether);
+    }
+
+    function test_deposit_imbalancedSecondDeposit_onlyPullsMatchedAmounts() public {
+        _depositInRange();
+
+        uint256 bob0Before = MockERC20(Currency.unwrap(currency0)).balanceOf(bob);
+        uint256 bob1Before = MockERC20(Currency.unwrap(currency1)).balanceOf(bob);
+
+        vm.prank(bob);
+        uint256 bobShares = hook.deposit(poolKey, 50 ether, 100 ether);
+
+        uint256 spent0 = bob0Before - MockERC20(Currency.unwrap(currency0)).balanceOf(bob);
+        uint256 spent1 = bob1Before - MockERC20(Currency.unwrap(currency1)).balanceOf(bob);
+
+        assertGt(bobShares, 49.999 ether);
+        assertLt(bobShares, 50.001 ether);
+        assertApproxEqAbs(spent0, spent1, 2);
+        assertLt(spent1, 50.001 ether);
     }
 
     function test_rebalance_movesToVault_whenOutOfRange() public {
@@ -279,5 +342,29 @@ contract IdleYieldHookTest is BaseTest {
         assertGt(reserve0After, reserve0Before);
         // Total value (in token1 terms) should be >= pre-swap minus a tiny dust window
         assertLt(reserve1After, reserve1Before);
+    }
+
+    function test_deposit_afterSwap_crystallizesFeesBeforeMintingShares() public {
+        _depositInRange();
+
+        MockERC20(Currency.unwrap(currency0)).mint(address(this), 10 ether);
+        MockERC20(Currency.unwrap(currency0)).approve(address(swapRouter), type(uint256).max);
+        MockERC20(Currency.unwrap(currency1)).approve(address(swapRouter), type(uint256).max);
+
+        swapRouter.swapExactTokensForTokens({
+            amountIn: 1 ether,
+            amountOutMin: 0,
+            zeroForOne: true,
+            poolKey: poolKey,
+            hookData: "",
+            receiver: address(this),
+            deadline: block.timestamp + 1
+        });
+
+        vm.prank(bob);
+        uint256 bobShares = hook.deposit(poolKey, 100 ether, 100 ether);
+
+        assertLt(bobShares, 100 ether);
+        assertGt(hook.poolShares(poolId, alice), bobShares);
     }
 }

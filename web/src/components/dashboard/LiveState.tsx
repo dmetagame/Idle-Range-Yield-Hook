@@ -101,9 +101,9 @@ export function LiveState({
 
       <div className="mx-auto mt-8 flex max-w-3xl flex-wrap items-center justify-between gap-x-8 gap-y-3 text-[13px] text-neutral-300">
         <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono tabular-nums">
-          <span>{fmt(reserve0)} IY0</span>
+          <span>{fmt(reserve0)} Token0</span>
           <span className="text-neutral-500">·</span>
-          <span>{fmt(reserve1)} IY1</span>
+          <span>{fmt(reserve1)} Token1</span>
         </div>
         <div className="min-w-[200px] flex-1 md:max-w-[280px]">
           <TickRangeMini lower={lowerTick} upper={upperTick} current={currentTick} />

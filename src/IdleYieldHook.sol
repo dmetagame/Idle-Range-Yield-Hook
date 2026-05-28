@@ -63,9 +63,15 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
 
     uint256 internal constant MIN_LIQUIDITY = 1_000;
     bytes32 internal constant POSITION_SALT = bytes32(0);
+    uint256 private _locked = 1;
 
+    address public owner;
     mapping(PoolId => ManagedPool) public pools;
+    mapping(bytes32 => bool) public approvedPoolConfigs;
 
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event PoolConfigApproved(bytes32 indexed configHash);
+    event PoolConfigApprovalRevoked(bytes32 indexed configHash);
     event PoolRegistered(
         PoolId indexed poolId, int24 lowerTick, int24 upperTick, address vault0, address vault1, Status status
     );
@@ -80,11 +86,38 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
     error PoolAlreadyRegistered();
     error InvalidTickRange();
     error InvalidVault();
+    error InvalidHook();
+    error NotOwner();
+    error PoolRegistrationNotApproved();
+    error Reentrancy();
     error ZeroDeposit();
     error InsufficientShares();
     error InsufficientInitialLiquidity();
+    error EmptyReserveSide();
 
-    constructor(IPoolManager _poolManager) BaseHook(_poolManager) {}
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier nonReentrant() {
+        if (_locked != 1) revert Reentrancy();
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
+
+    constructor(IPoolManager _poolManager, address initialOwner) BaseHook(_poolManager) {
+        require(initialOwner != address(0), "IdleYieldHook: zero owner");
+        owner = initialOwner;
+        emit OwnershipTransferred(address(0), initialOwner);
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "IdleYieldHook: zero owner");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
@@ -158,8 +191,15 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         int24 upperTick,
         ERC4626 vault0,
         ERC4626 vault1
-    ) external {
-        if (lowerTick >= upperTick) revert InvalidTickRange();
+    ) external nonReentrant {
+        _validatePoolShape(key, lowerTick, upperTick);
+
+        bytes32 configHash = poolConfigHash(key, lowerTick, upperTick, vault0, vault1);
+        if (msg.sender != owner) {
+            if (!approvedPoolConfigs[configHash]) revert PoolRegistrationNotApproved();
+        }
+        delete approvedPoolConfigs[configHash];
+
         if (address(vault0.asset()) != Currency.unwrap(key.currency0)) revert InvalidVault();
         if (address(vault1.asset()) != Currency.unwrap(key.currency1)) revert InvalidVault();
 
@@ -178,7 +218,55 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         emit PoolRegistered(poolId, lowerTick, upperTick, address(vault0), address(vault1), p.status);
     }
 
-    function deposit(PoolKey calldata key, uint256 amount0, uint256 amount1) external returns (uint256 shares) {
+    function approvePoolConfig(
+        PoolKey calldata key,
+        int24 lowerTick,
+        int24 upperTick,
+        ERC4626 vault0,
+        ERC4626 vault1
+    ) external onlyOwner returns (bytes32 configHash) {
+        _validatePoolShape(key, lowerTick, upperTick);
+        if (address(vault0.asset()) != Currency.unwrap(key.currency0)) revert InvalidVault();
+        if (address(vault1.asset()) != Currency.unwrap(key.currency1)) revert InvalidVault();
+        poolManager.getSlot0(key.toId());
+
+        configHash = poolConfigHash(key, lowerTick, upperTick, vault0, vault1);
+        approvedPoolConfigs[configHash] = true;
+        emit PoolConfigApproved(configHash);
+    }
+
+    function revokePoolConfig(bytes32 configHash) external onlyOwner {
+        delete approvedPoolConfigs[configHash];
+        emit PoolConfigApprovalRevoked(configHash);
+    }
+
+    function poolConfigHash(
+        PoolKey calldata key,
+        int24 lowerTick,
+        int24 upperTick,
+        ERC4626 vault0,
+        ERC4626 vault1
+    ) public pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                Currency.unwrap(key.currency0),
+                Currency.unwrap(key.currency1),
+                key.fee,
+                key.tickSpacing,
+                address(key.hooks),
+                lowerTick,
+                upperTick,
+                address(vault0),
+                address(vault1)
+            )
+        );
+    }
+
+    function deposit(PoolKey calldata key, uint256 amount0, uint256 amount1)
+        external
+        nonReentrant
+        returns (uint256 shares)
+    {
         if (amount0 == 0 && amount1 == 0) revert ZeroDeposit();
 
         PoolId poolId = key.toId();
@@ -188,13 +276,16 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         ERC20 token0 = ERC20(Currency.unwrap(key.currency0));
         ERC20 token1 = ERC20(Currency.unwrap(key.currency1));
 
-        token0.safeTransferFrom(msg.sender, address(this), amount0);
-        token1.safeTransferFrom(msg.sender, address(this), amount1);
+        if (p.status == Status.ACTIVE_IN_RANGE && p.liquidityInPool > 0) {
+            _burnAllRangeFromV4(key);
+        }
 
         uint256 reserve0Before = _totalReserveSide(poolId, p, true);
         uint256 reserve1Before = _totalReserveSide(poolId, p, false);
 
         uint256 tokenId = uint256(PoolId.unwrap(poolId));
+        uint256 used0 = amount0;
+        uint256 used1 = amount1;
 
         if (p.totalShares == 0) {
             uint256 initialShares = FixedPointMathLib.sqrt(amount0 * amount1);
@@ -203,15 +294,21 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
             _mint(address(0xdead), tokenId, MIN_LIQUIDITY);
             p.totalShares = initialShares;
         } else {
+            if (reserve0Before == 0 || reserve1Before == 0) revert EmptyReserveSide();
             uint256 sharesFrom0 = (amount0 * p.totalShares) / reserve0Before;
             uint256 sharesFrom1 = (amount1 * p.totalShares) / reserve1Before;
             shares = sharesFrom0 < sharesFrom1 ? sharesFrom0 : sharesFrom1;
             if (shares == 0) revert ZeroDeposit();
+            used0 = (shares * reserve0Before) / p.totalShares;
+            used1 = (shares * reserve1Before) / p.totalShares;
             p.totalShares += shares;
         }
 
-        p.token0InHook += amount0;
-        p.token1InHook += amount1;
+        if (used0 > 0) token0.safeTransferFrom(msg.sender, address(this), used0);
+        if (used1 > 0) token1.safeTransferFrom(msg.sender, address(this), used1);
+
+        p.token0InHook += used0;
+        p.token1InHook += used1;
 
         if (p.status == Status.ACTIVE_IN_RANGE) {
             _mintAllInHookToV4(key);
@@ -220,11 +317,12 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
         }
 
         _mint(msg.sender, tokenId, shares);
-        emit Deposited(poolId, msg.sender, amount0, amount1, shares);
+        emit Deposited(poolId, msg.sender, used0, used1, shares);
     }
 
     function withdraw(PoolKey calldata key, uint256 shares)
         external
+        nonReentrant
         returns (uint256 amount0, uint256 amount1)
     {
         PoolId poolId = key.toId();
@@ -265,7 +363,7 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
 
     /// @notice Permissionless trigger to re-evaluate range and park/unpark as needed.
     /// @dev Uses the unlock+callback path because it's called from non-unlocked context.
-    function rebalance(PoolKey calldata key) external {
+    function rebalance(PoolKey calldata key) external nonReentrant {
         PoolId poolId = key.toId();
         ManagedPool storage p = pools[poolId];
         if (p.status == Status.UNSET) return;
@@ -342,6 +440,16 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
 
     function _isInRange(int24 tick, int24 lower, int24 upper) internal pure returns (bool) {
         return tick >= lower && tick < upper;
+    }
+
+    function _validatePoolShape(PoolKey calldata key, int24 lowerTick, int24 upperTick) internal view {
+        if (address(key.hooks) != address(this)) revert InvalidHook();
+        if (
+            lowerTick >= upperTick || lowerTick < TickMath.MIN_TICK || upperTick > TickMath.MAX_TICK
+                || key.tickSpacing <= 0 || lowerTick % key.tickSpacing != 0 || upperTick % key.tickSpacing != 0
+        ) {
+            revert InvalidTickRange();
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -530,6 +638,7 @@ contract IdleYieldHook is BaseHook, ERC6909, IUnlockCallback {
     }
 
     function _depositToVault(ERC4626 vault, ManagedPool storage p, uint256 amount, bool isToken0) internal {
+        ERC20(address(vault.asset())).safeApprove(address(vault), 0);
         ERC20(address(vault.asset())).safeApprove(address(vault), amount);
         uint256 mintedShares = vault.deposit(amount, address(this));
         if (isToken0) {

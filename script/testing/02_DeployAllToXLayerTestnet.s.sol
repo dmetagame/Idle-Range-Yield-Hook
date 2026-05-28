@@ -79,10 +79,11 @@ contract DeployAllToXLayerTestnet is Script {
                 | Hooks.AFTER_SWAP_FLAG
         );
         bytes memory creationCode = type(IdleYieldHook).creationCode;
-        bytes memory ctorArgs = abi.encode(IPoolManager(poolManager));
+        bytes memory ctorArgs = abi.encode(IPoolManager(poolManager), sender);
         (address hookAddr, bytes32 salt) = HookMiner.find(CREATE2_DEPLOYER, flags, creationCode, ctorArgs);
-        IdleYieldHook hook = new IdleYieldHook{salt: salt}(IPoolManager(poolManager));
+        IdleYieldHook hook = new IdleYieldHook{salt: salt}(IPoolManager(poolManager), sender);
         require(address(hook) == hookAddr, "Mined address mismatch");
+        require(hook.owner() == sender, "Hook owner mismatch");
 
         // 5) Initialise pool + register with hook
         PoolKey memory key = PoolKey({

@@ -10,6 +10,11 @@ interface IAaveV3Pool {
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
 }
 
+interface IAaveAToken {
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+    function POOL() external view returns (address);
+}
+
 /// @notice ERC-4626 wrapper around an Aave V3 reserve.
 /// @dev This is the production integration surface for replacing MockYieldVault.
 ///      Aave aTokens accrue interest through balance growth, so aToken.balanceOf
@@ -20,9 +25,15 @@ contract AaveV3ERC4626Adapter is ERC4626 {
     IAaveV3Pool public immutable pool;
     ERC20 public immutable aToken;
 
+    error InvalidAaveToken();
+
     constructor(ERC20 underlying, IAaveV3Pool aavePool, ERC20 reserveAToken, string memory name, string memory symbol)
         ERC4626(underlying, name, symbol)
     {
+        IAaveAToken typedAToken = IAaveAToken(address(reserveAToken));
+        if (typedAToken.UNDERLYING_ASSET_ADDRESS() != address(underlying)) revert InvalidAaveToken();
+        if (typedAToken.POOL() != address(aavePool)) revert InvalidAaveToken();
+
         pool = aavePool;
         aToken = reserveAToken;
     }

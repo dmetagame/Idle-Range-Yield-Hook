@@ -9,8 +9,10 @@ Built for the **X Layer Build X Hackathon 2026** (Uniswap V4 Hook track).
 
 - **dApp:** https://idle-yield-hook.vercel.app
 - **Chain:** X Layer mainnet (chain 196)
-- **IdleYieldHook:** [`0xc1c27663969645A7bfd53507324227137eE058C0`](https://www.oklink.com/xlayer/address/0xc1c27663969645A7bfd53507324227137eE058C0)
+- **IdleYieldHook:** [`0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0`](https://www.oklink.com/xlayer/address/0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0)
 - **Source:** this repo
+
+Audit hardening note: the deployed hook above includes the post-audit fixes in this source tree.
 
 ## What the hook does
 
@@ -51,34 +53,35 @@ price for existing depositors.
 
 | Contract | Address |
 |---|---|
-| IdleYieldHook | `0xc1c27663969645A7bfd53507324227137eE058C0` |
-| MockYieldVault (yIY0) | `0x54E7f00A7401130340e81cE6d9B0D02C7C8c7E5d` |
-| MockYieldVault (yIY1) | `0x09a6133261d993b58324bA3C6d14D93B12BD8CB4` |
-| Token0 (IY0) | `0x3517b74800E6A731656D8cc809d77f730da4d1dA` |
-| Token1 (IY1) | `0x746A932D764d37f10c2f474D170734A05a20e87a` |
+| IdleYieldHook | `0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0` |
+| MockYieldVault (vault0) | `0x6f8be9FfCaD5EbA84d1fe3db9875005FBA24c396` |
+| MockYieldVault (vault1) | `0x90Fee8b4D1834CbbAc5427e3D3554d189B8653f8` |
+| Pool token0 | `0x997cD0d393FCe9c3726cCDb02Cc94F9b222f4182` |
+| Pool token1 | `0xF20a8F2e9F4127c6e83aAB89106d09d8C26AF6A9` |
 | Hookmate V4Router | `0xe4e6cAdE3e2A67F16a5D867c44e1E7Df02F0fC03` |
 | PoolManager (canonical) | `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32` |
 
 Pool: `fee=3000` (0.30%), `tickSpacing=60`, target range `[-960, +960]` (~±10% around 1:1).
-PoolId: `0x12649fe7126956cb19e7ab3148a913b9238eb04e2f68dc8a3bdd0d90b62ddb53`.
+PoolId: `0x98f63bcbedff50af73958cecf72f00c1d8a17ae112625f5d92fb154d5f75235c`.
 
 Vault demo pool: `fee=500` (0.05%), `tickSpacing=10`, initialized at tick `+5000`, same
 target range `[-960, +960]`.
-PoolId: `0x32904e198828cf60f761ffcafc24a56d31c6a93a542c307dab4d7f2919e0f5ae`.
+PoolId: `0xe302f4a5cb7346ba599446d927aff8492e2f68149d6bd9dbf94092f81850304e`.
 
-The vault demo pool can be initialized either from the dApp or via
-`script/06_RegisterParkedDemoPool.s.sol`; it uses the already deployed hook, tokens, and
-vaults.
+In the hardened source version, the vault demo pool can be initialized either by the hook owner
+or by anyone after the owner pre-approves the exact pool/vault config.
 
 ## Run the demo
 
 1. Visit https://idle-yield-hook.vercel.app
 2. Connect any EVM wallet, switch to X Layer mainnet (chain 196). The faucet/buy is via OKX
    if you need OKB for gas (deploy script costs ~0.0004 OKB).
-3. Use the **Test tokens** card to mint IY0 and IY1 to your wallet.
-4. In **Fee pool**, click **Deposit**, then **Swap** a few times. Reserves grow with fee
-   accrual on every swap (proven on-chain: 9 swaps moved reserves from 2.000 → 2.049).
-5. Switch to **Vault demo**. If it shows `UNSET`, click **Initialize vault demo** once.
+3. Use the **Test tokens** card to mint Token0 and Token1 to your wallet.
+4. In **Fee pool**, click **Deposit**, then **Swap** a few times. Fees accrue back into the
+   hook-owned position; the seeded proof run deposited `2 + 2` and executed 9 on-chain swaps,
+   ending at about `2.0496 Token0` and `1.9504 Token1` reserves.
+5. Switch to **Vault demo**. In the hardened source version, initialization requires the exact
+   config to be owner-approved first.
 6. Deposit into the vault demo, then click **Accrue yield**. The pool's vault-share assets
    and claimable reserves increase on-chain.
 
@@ -86,7 +89,7 @@ vaults.
 
 ```bash
 forge install
-forge test         # 19 tests cover share math, V4 LP mint/burn, park/unpark, yield accrual
+forge test         # 25 tests cover registration controls, share math, V4 LP mint/burn, and yield
 
 # Deploy to mainnet:
 forge script script/04_DeployToXLayerMainnet.s.sol \
@@ -96,7 +99,8 @@ forge script script/04_DeployToXLayerMainnet.s.sol \
 forge script script/05_DeployRouter.s.sol \
   --rpc-url xlayer --broadcast --account deployer --sender <YOUR_ADDR>
 
-# Register the optional out-of-range vault demo pool against the existing hook:
+# Register the optional out-of-range vault demo pool against an existing hook
+# if it was not already registered by the main deployment script:
 forge script script/06_RegisterParkedDemoPool.s.sol \
   --rpc-url xlayer --broadcast --account deployer --sender <YOUR_ADDR>
 ```
@@ -112,12 +116,15 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
   vault-share accounting, and yield-accrual path are live on-chain instead of unit-test
   only. A v2 production design should add absorber liquidity around the managed range so a
   single pool can cross and park naturally.
-- Tokens (IY0/IY1) are `MockERC20`s with a public mint. They're stand-ins for a real pair
+- Tokens are `MockERC20`s with a public mint. They're stand-ins for a real pair
   (WETH/USDC) — the mechanism is identical and judges can interact freely without bridging.
 - `MockYieldVault.accrueYield(amount)` simulates lending yield by pulling token from the
   caller. In production this would be replaced with a wrapper over a real X Layer lending
   market. `src/integrations/AaveV3ERC4626Adapter.sol` is included as the Aave V3 ERC-4626
   adapter surface for that replacement.
+- Pool registration is owner-gated unless the owner pre-approves the exact config hash. Deposits
+  crystallize pending V4 fees before minting shares, and second-plus deposits only pull matched
+  token amounts instead of donating the excess side.
 
 ## Integrations added
 
@@ -127,8 +134,9 @@ runtime limit; default `runs = 200` compiled to 32 KB and got rejected on-chain.
 - **OKX Wallet / DEX:** the dApp now includes the official OKX Wallet entry point, OKX DEX
   swap page, and an OKX DEX Swap API URL scaffold for chain `196`.
 - **Aave V3 path:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave reserve as
-  ERC-4626, and `script/07_DeployAaveAdapters.s.sol` deploys two adapters from verified
-  env-provided market addresses:
+  ERC-4626, verifies the aToken's underlying asset and pool binding, and
+  `script/07_DeployAaveAdapters.s.sol` deploys two adapters from verified env-provided market
+  addresses:
 
 ```bash
 AAVE_V3_POOL=<official-aave-pool> \

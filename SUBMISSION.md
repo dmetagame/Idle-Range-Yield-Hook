@@ -25,7 +25,8 @@ showing `ACTIVE_IN_RANGE`.
 numbers ticking up.
 **Voiceover:**
 > "Every swap routes through the hook's LP. That 0.30% fee compounds back into reserves.
-> Reserves grew from 2.000 to 2.049 across the test swaps — visible on-chain."
+> The seeded proof run deposited 2 + 2, then executed 9 swaps and ended around 2.0496
+> Token0 and 1.9504 Token1 reserves — visible on-chain."
 
 ### 1:05–1:25 · The parked half (visual: OKX explorer showing hook contract + test output)
 **Action:** Switch the dApp to **Vault demo**. If needed, click **Initialize vault demo**,
@@ -75,19 +76,19 @@ unchanged for any ERC-20 pair on any V4 pool that wants the dual-yield property.
 
 ### Completion
 - **Deployed on X Layer mainnet:** hook at
-  `0xc1c27663969645A7bfd53507324227137eE058C0`, two vaults, one active V4 pool initialized
-  and registered, plus a dApp/script path to initialize the parked vault-demo pool.
+  `0x3e4e0D5009Ee9fa6f4376b064fd1A4e4C01BD8c0`, two vaults, one active V4 pool initialized
+  and registered, plus one out-of-range vault-demo pool registered in the same deploy.
 - **Live dApp:** https://idle-yield-hook.vercel.app — Wagmi/RainbowKit, connects to chain
   196, with Fee pool and Vault demo modes, mock-token minting, deposit, swap, and vault-yield
   actions.
-- **Tests:** 19 Foundry tests pass covering ERC-6909 share math, V4 LP mint/burn via unlock
-  callback, park/unpark transitions, and vault yield accrual.
-- **On-chain proof:** 9 real swaps grew reserves from 2.000 → 2.049 across the registered
-  range. PoolId
-  `0x12649fe7126956cb19e7ab3148a913b9238eb04e2f68dc8a3bdd0d90b62ddb53`.
+- **Tests:** 25 Foundry tests pass covering registration controls, fee crystallization before
+  deposits, ERC-6909 share math, V4 LP mint/burn via unlock callback, and vault yield accrual.
+- **On-chain proof:** the seeded run deposited `2 + 2`, then executed 9 real swaps across the
+  registered range, ending around `2.0496 Token0` and `1.9504 Token1` reserves. Hardened active PoolId
+  `0x98f63bcbedff50af73958cecf72f00c1d8a17ae112625f5d92fb154d5f75235c`.
 - **Parked proof path:** Vault demo pool config is `fee=500`, `tickSpacing=10`, initialized
   at tick `+5000`, PoolId
-  `0x32904e198828cf60f761ffcafc24a56d31c6a93a542c307dab4d7f2919e0f5ae`. Deposits land in
+  `0xe302f4a5cb7346ba599446d927aff8492e2f68149d6bd9dbf94092f81850304e`. Deposits land in
   vault shares and mock yield raises `convertToAssets(vaultShares)`.
 - **Aave-ready integration:** `src/integrations/AaveV3ERC4626Adapter.sol` wraps an Aave V3
   reserve behind the same ERC-4626 surface used by the hook, with an env-driven deployment
@@ -103,11 +104,11 @@ https://github.com/dmetagame/Idle-Range-Yield-Hook
 https://idle-yield-hook.vercel.app
 
 ### Honest scope note
-The original active fee pool cannot naturally cross into PARKED by swap because the hook
-owns the only LP in that pool. To make the parked/yield path live for judging without
-redeploying the hook, the dApp includes a second out-of-range V4 pool registered to the same
-hook and vaults. A v2 production design should add absorber liquidity around the managed
-range so one pool can cross, park, and unpark naturally.
+The active fee pool cannot naturally cross into PARKED by swap because the hook owns the only LP
+in that pool. To make the parked/yield path live for judging, the dApp includes a second
+out-of-range V4 pool registered to the same hardened hook and vaults. A v2 production design
+should add absorber liquidity around the managed range so one pool can cross, park, and unpark
+naturally.
 
 ---
 

@@ -1,3 +1,5 @@
+import { addresses } from "@/lib/contracts";
+
 export function Footer() {
   return (
     <footer className="border-t border-neutral-700">
@@ -20,7 +22,7 @@ export function Footer() {
             Docs
           </a>
           <a
-            href="https://www.oklink.com/xlayer/address/0xc1c27663969645A7bfd53507324227137eE058C0"
+            href={`https://www.oklink.com/xlayer/address/${addresses.idleYieldHook}`}
             target="_blank"
             rel="noreferrer"
             className="transition-colors duration-150 hover:text-neutral-0"

@@ -80,8 +80,8 @@ export function PoolDetails({
               <StatRow label="V4 LP liquidity" value={liquidityInPool.toString()} />
             </div>
             <div className="divide-y divide-neutral-700">
-              <StatRow label="Reserve · IY0" value={fmt(reserve0)} />
-              <StatRow label="Reserve · IY1" value={fmt(reserve1)} />
+              <StatRow label="Reserve · Token0" value={fmt(reserve0)} />
+              <StatRow label="Reserve · Token1" value={fmt(reserve1)} />
               <StatRow
                 label="Vault assets"
                 value={`${fmt(vault0Assets)} · ${fmt(vault1Assets)}`}
@@ -112,10 +112,10 @@ export function PoolDetails({
               <ContractChip label="IdleYieldHook" address={addresses.idleYieldHook} />
               <ContractChip label="PoolManager" address={addresses.poolManager} />
               <ContractChip label="V4Router" address={addresses.v4Router} />
-              <ContractChip label="Token0 (IY0)" address={addresses.token0} />
-              <ContractChip label="Token1 (IY1)" address={addresses.token1} />
-              <ContractChip label="Vault0 (yIY0)" address={addresses.vault0} />
-              <ContractChip label="Vault1 (yIY1)" address={addresses.vault1} />
+              <ContractChip label="Token0" address={addresses.token0} />
+              <ContractChip label="Token1" address={addresses.token1} />
+              <ContractChip label="Vault0" address={addresses.vault0} />
+              <ContractChip label="Vault1" address={addresses.vault1} />
             </div>
           </div>
 

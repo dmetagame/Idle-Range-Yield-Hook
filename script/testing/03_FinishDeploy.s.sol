@@ -39,19 +39,21 @@ contract FinishDeploy is Script {
         require(TOKEN0.code.length > 0, "TOKEN0 not deployed");
         require(POOL_MANAGER.code.length > 0, "POOL_MANAGER not deployed");
         require(VAULT0.code.length > 0, "VAULT0 not deployed");
+        address sender = msg.sender;
 
         uint160 flags = uint160(
             Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG
                 | Hooks.AFTER_SWAP_FLAG
         );
         bytes memory creationCode = type(IdleYieldHook).creationCode;
-        bytes memory ctorArgs = abi.encode(IPoolManager(POOL_MANAGER));
+        bytes memory ctorArgs = abi.encode(IPoolManager(POOL_MANAGER), sender);
         (address mined, bytes32 salt) = HookMiner.find(CREATE2_DEPLOYER, flags, creationCode, ctorArgs);
 
         vm.startBroadcast();
 
-        IdleYieldHook hook = new IdleYieldHook{salt: salt}(IPoolManager(POOL_MANAGER));
+        IdleYieldHook hook = new IdleYieldHook{salt: salt}(IPoolManager(POOL_MANAGER), sender);
         require(address(hook) == mined, "Mined address mismatch");
+        require(hook.owner() == sender, "Hook owner mismatch");
 
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(TOKEN0),

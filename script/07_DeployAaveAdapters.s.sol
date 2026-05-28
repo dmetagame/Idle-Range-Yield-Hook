@@ -5,7 +5,7 @@ import {Script, console2} from "forge-std/Script.sol";
 
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 
-import {AaveV3ERC4626Adapter, IAaveV3Pool} from "../src/integrations/AaveV3ERC4626Adapter.sol";
+import {AaveV3ERC4626Adapter, IAaveAToken, IAaveV3Pool} from "../src/integrations/AaveV3ERC4626Adapter.sol";
 import {XLayerConstants} from "./base/XLayerConstants.sol";
 
 /// @notice Deploys ERC-4626 adapters for an official Aave V3 market.
@@ -26,6 +26,10 @@ contract DeployAaveAdapters is Script {
         require(asset1.code.length > 0, "AAVE_ASSET1 has no code");
         require(aToken0.code.length > 0, "AAVE_ATOKEN0 has no code");
         require(aToken1.code.length > 0, "AAVE_ATOKEN1 has no code");
+        require(IAaveAToken(aToken0).UNDERLYING_ASSET_ADDRESS() == asset0, "AAVE_ATOKEN0 asset mismatch");
+        require(IAaveAToken(aToken1).UNDERLYING_ASSET_ADDRESS() == asset1, "AAVE_ATOKEN1 asset mismatch");
+        require(IAaveAToken(aToken0).POOL() == aavePool, "AAVE_ATOKEN0 pool mismatch");
+        require(IAaveAToken(aToken1).POOL() == aavePool, "AAVE_ATOKEN1 pool mismatch");
 
         vm.startBroadcast();
         AaveV3ERC4626Adapter vault0 = new AaveV3ERC4626Adapter(
