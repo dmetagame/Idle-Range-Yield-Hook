@@ -218,7 +218,7 @@ function Dashboard() {
   return (
     <>
       <div className="mx-auto max-w-3xl px-6 pt-12 md:pt-20">
-        <StateStrip status={status} />
+        <StateStrip status={status} poolMode={poolMode} onSelectMode={setPoolMode} />
       </div>
       <LiveState
         poolId={poolId}
