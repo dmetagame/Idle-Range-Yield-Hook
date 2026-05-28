@@ -65,7 +65,7 @@ price for existing depositors.
 | MockYieldVault (vault1) | `0x90Fee8b4D1834CbbAc5427e3D3554d189B8653f8` |
 | Pool token0 | `0x997cD0d393FCe9c3726cCDb02Cc94F9b222f4182` |
 | Pool token1 | `0xF20a8F2e9F4127c6e83aAB89106d09d8C26AF6A9` |
-| Hookmate V4Router | `0xe4e6cAdE3e2A67F16a5D867c44e1E7Df02F0fC03` |
+| Hookmate V4Router | `0xE4e6CAdE3E2a67F16A5d867C44e1e7Df02f0fc03` |
 | PoolManager (canonical) | `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32` |
 
 Pool: `fee=3000` (0.30%), `tickSpacing=60`, target range `[-960, +960]` (~±10% around 1:1).
